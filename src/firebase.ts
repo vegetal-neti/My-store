@@ -14,6 +14,13 @@ import {
   query,
   orderBy
 } from 'firebase/firestore';
+import { 
+  getStorage, 
+  ref, 
+  uploadBytes, 
+  getDownloadURL, 
+  deleteObject 
+} from 'firebase/storage';
 
 const metaEnv = (import.meta as any).env || {};
 
@@ -29,6 +36,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
 enum OperationType {
@@ -297,5 +305,39 @@ export const deleteCategory = async (id: string) => {
     await deleteDoc(docRef);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `${CATEGORIES_COLLECTION}/${id}`);
+  }
+};
+
+// ==========================================
+// Storage API for Product Images
+// ==========================================
+
+export const uploadProductImage = async (file: File): Promise<string> => {
+  try {
+    const fileExtension = file.name.split('.').pop() || 'jpg';
+    const randomId = Math.random().toString(36).substring(2, 10);
+    const fileName = `${Date.now()}_${randomId}.${fileExtension}`;
+    const filePath = `products/${fileName}`;
+    const storageRef = ref(storage, filePath);
+    
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    return downloadURL;
+  } catch (error) {
+    console.error("Error uploading image to storage:", error);
+    throw error;
+  }
+};
+
+export const deleteProductImageByUrl = async (url: string): Promise<void> => {
+  if (!url) return;
+  try {
+    // If it is a Firebase storage download URL, we can attempt to delete it
+    if (url.includes('firebasestorage.googleapis.com')) {
+      const storageRef = ref(storage, url);
+      await deleteObject(storageRef);
+    }
+  } catch (error) {
+    console.warn("Could not delete image from Firebase Storage:", error);
   }
 };

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getProducts, addProduct, updateProduct, deleteProduct, getCategories } from '../../firebase';
 import { Edit2, Trash2, Plus, X, Image as ImageIcon } from 'lucide-react';
+import { ProductImageUpload } from './ProductImageUpload';
 
 export const AdminProducts = () => {
   const [products, setProducts] = useState<any[]>([]);
@@ -287,35 +288,13 @@ export const AdminProducts = () => {
             </div>
           </div>
 
-          {/* Main Image URL */}
-          <div>
-            <label className="block text-[13px] text-neutral-500 mb-1 ml-1 font-medium">Main Image URL</label>
-            <input type="url" value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors" placeholder="https://unsplash.com/... or search URL" />
-          </div>
-
-          {/* Extra Images Management (Multi-gallery) */}
-          <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200/50">
-            <label className="block text-[13px] text-neutral-500 mb-2 font-semibold">Image Gallery (Supports multiple images)</label>
-            <div className="flex gap-2">
-              <input type="url" value={newImageUrl} onChange={e => setNewImageUrl(e.target.value)} className="flex-1 bg-white border border-neutral-200 rounded-xl px-4 py-2.5 text-[13px] outline-none focus:border-brand-text transition-colors" placeholder="Add extra high-quality image URL" />
-              <button type="button" onClick={appendImage} className="bg-white hover:bg-neutral-100 text-brand-text px-4 py-2.5 rounded-xl border border-neutral-200 text-[13px] font-medium transition-colors shrink-0">
-                Add URL
-              </button>
-            </div>
-            
-            {formData.imagesInput.length > 0 && (
-              <div className="grid grid-cols-2 gap-2 mt-3 max-h-[160px] overflow-y-auto pr-1">
-                {formData.imagesInput.map((url, i) => (
-                  <div key={i} className="flex items-center justify-between bg-white text-[12px] py-1.5 px-3 border border-neutral-200 rounded-lg text-neutral-600">
-                    <span className="truncate max-w-[150px] font-mono select-all">{url}</span>
-                    <button type="button" onClick={() => removeImage(i)} className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50">
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Main & Multi-Image Gallery via Firebase Storage */}
+          <ProductImageUpload
+            mainImage={formData.image}
+            setMainImage={(url) => setFormData(p => ({ ...p, image: url }))}
+            images={formData.imagesInput}
+            setImages={(urls) => setFormData(p => ({ ...p, imagesInput: urls }))}
+          />
 
           {/* Sizes Management */}
           <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200/50">
