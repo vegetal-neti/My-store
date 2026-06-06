@@ -312,20 +312,88 @@ export const deleteCategory = async (id: string) => {
 // Storage API for Product Images
 // ==========================================
 
+const compressImageToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 800;
+        const maxH = 1000;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxW) {
+          height = Math.round((height * maxW) / width);
+          width = maxW;
+        }
+        if (height > maxH) {
+          width = Math.round((width * maxH) / height);
+          height = maxH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(event.target?.result as string || '');
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        // Compress as JPEG to keep the payload extremely lightweight
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+        resolve(compressedBase64);
+      };
+      img.onerror = () => {
+        resolve(event.target?.result as string || '');
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      resolve('');
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 export const uploadProductImage = async (file: File): Promise<string> => {
+  const uploadPromise = (async () => {
+    try {
+      const fileExtension = file.name.split('.').pop() || 'jpg';
+      const randomId = Math.random().toString(36).substring(2, 10);
+      const fileName = `${Date.now()}_${randomId}.${fileExtension}`;
+      const filePath = `products/${fileName}`;
+      const storageRef = ref(storage, filePath);
+      
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return downloadURL;
+    } catch (err) {
+      throw err;
+    }
+  })();
+
+  const timeoutPromise = new Promise<string>((_, reject) => {
+    setTimeout(() => reject(new Error("Timeout")), 6000); // 6-seconds timeout
+  });
+
   try {
-    const fileExtension = file.name.split('.').pop() || 'jpg';
-    const randomId = Math.random().toString(36).substring(2, 10);
-    const fileName = `${Date.now()}_${randomId}.${fileExtension}`;
-    const filePath = `products/${fileName}`;
-    const storageRef = ref(storage, filePath);
-    
-    const snapshot = await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(snapshot.ref);
-    return downloadURL;
+    return await Promise.race([uploadPromise, timeoutPromise]);
   } catch (error) {
-    console.error("Error uploading image to storage:", error);
-    throw error;
+    console.warn("Storage upload failed or timed out. Falling back to compressed client-side Base64...", error);
+    try {
+      const compressed = await compressImageToBase64(file);
+      if (compressed) {
+        return compressed;
+      }
+      throw error;
+    } catch (compressError) {
+      console.error("Base64 compression failed:", compressError);
+      throw error;
+    }
   }
 };
 
