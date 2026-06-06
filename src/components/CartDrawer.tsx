@@ -86,8 +86,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onCheckout }) => {
                     </div>
                     
                     <div className="flex items-end justify-between mt-4">
-                      <span className="text-[15px] font-medium text-brand-text">
-                        ${item.price.toFixed(2)}
+                      <span className="text-[15px] font-medium text-brand-text inline-flex gap-1" dir="ltr">
+                        <span>دج</span>
+                        <span>{(item.price || 0).toFixed(2)}</span>
                       </span>
                       
                       {/* Quantity Controls */}
@@ -123,16 +124,25 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onCheckout }) => {
             <div className="flex flex-col gap-3.5 mb-6">
               <div className="flex justify-between text-[15px] text-neutral-500">
                 <span>Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span className="inline-flex gap-1" dir="ltr">
+                  <span>دج</span>
+                  <span>{subtotal.toFixed(2)}</span>
+                </span>
               </div>
               <div className="flex justify-between text-[15px] text-neutral-500">
                 <span>Shipping</span>
-                <span>${shipping.toFixed(2)}</span>
+                <span className="inline-flex gap-1" dir="ltr">
+                  <span>دج</span>
+                  <span>{shipping.toFixed(2)}</span>
+                </span>
               </div>
               <div className="w-full h-px bg-neutral-100 my-1"></div>
               <div className="flex justify-between text-[17px] font-medium text-brand-text">
                 <span>Total</span>
-                <span>${total.toFixed(2)}</span>
+                <span className="inline-flex gap-1" dir="ltr">
+                  <span>دج</span>
+                  <span>{total.toFixed(2)}</span>
+                </span>
               </div>
             </div>
             <button 

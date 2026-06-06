@@ -59,6 +59,7 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack, onSuccess }) => {
         })),
         totalPrice: total,
         customerInfo: formData,
+        paymentMethod: 'COD',
         status: 'pending',
       };
 
@@ -106,7 +107,10 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack, onSuccess }) => {
                     <p className="text-neutral-500 text-[12px]">Qty: {item.quantity}</p>
                   </div>
                 </div>
-                <span className="font-medium text-brand-text">${(item.price * item.quantity).toFixed(2)}</span>
+                <span className="font-medium text-brand-text inline-flex gap-1" dir="ltr">
+                  <span>دج</span>
+                  <span>{((item.price || 0) * item.quantity).toFixed(2)}</span>
+                </span>
               </div>
             ))}
           </div>
@@ -116,15 +120,24 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack, onSuccess }) => {
           <div className="flex flex-col gap-2 text-[14px]">
             <div className="flex justify-between text-neutral-500">
               <span>Subtotal</span>
-              <span>${subtotal.toFixed(2)}</span>
+              <span className="inline-flex gap-1" dir="ltr">
+                <span>دج</span>
+                <span>{subtotal.toFixed(2)}</span>
+              </span>
             </div>
             <div className="flex justify-between text-neutral-500">
-              <span>Shipping</span>
-              <span>${shipping.toFixed(2)}</span>
+               <span>Shipping</span>
+               <span className="inline-flex gap-1" dir="ltr">
+                 <span>دج</span>
+                 <span>{shipping.toFixed(2)}</span>
+               </span>
             </div>
             <div className="flex justify-between text-[16px] font-medium text-brand-text mt-2 pt-2 border-t border-neutral-100">
-              <span>Total</span>
-              <span>${total.toFixed(2)}</span>
+               <span>Total</span>
+               <span className="inline-flex gap-1" dir="ltr">
+                 <span>دج</span>
+                 <span>{total.toFixed(2)}</span>
+               </span>
             </div>
           </div>
         </div>
@@ -179,6 +192,24 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack, onSuccess }) => {
                 placeholder="Street address, apartment, suite, etc."
               />
             </div>
+          </div>
+
+          {/* Cash on Delivery Information Card */}
+          <div className="bg-neutral-50/80 border border-neutral-200/50 rounded-2xl p-4.5 mt-2 shadow-sm">
+            <h3 className="font-semibold text-brand-text text-[14px] flex items-center justify-between mb-2">
+              <span>طريقة الدفع / Payment Method</span>
+              <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full font-mono uppercase font-bold tracking-wider">
+                COD ONLY
+              </span>
+            </h3>
+            <p className="text-[14px] text-brand-text font-medium leading-relaxed">
+              الدفع عند الاستلام (Cash on Delivery)
+            </p>
+            <p className="text-[12px] text-neutral-500 mt-1.5 leading-relaxed">
+              ستقوم بالدفع نقداً للمندوب عند استلام طلبك من عتبة بابك. لا توجد أي رسوم خفية.
+              <br />
+              You will pay in cash to the delivery courier when your order arrives. No online payment required.
+            </p>
           </div>
 
           <button 

@@ -15,13 +15,15 @@ import {
   orderBy
 } from 'firebase/firestore';
 
+const metaEnv = (import.meta as any).env || {};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: metaEnv.VITE_FIREBASE_API_KEY,
+  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: metaEnv.VITE_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);
@@ -147,6 +149,19 @@ export const getProducts = async () => {
   }
 };
 
+export const getProductById = async (id: string) => {
+  try {
+    const docRef = doc(db, PRODUCTS_COLLECTION, id);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return { id: snap.id, ...snap.data() };
+    }
+    return null;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `${PRODUCTS_COLLECTION}/${id}`);
+  }
+};
+
 export const addProduct = async (productData: any) => {
   try {
     const docRef = await addDoc(collection(db, PRODUCTS_COLLECTION), {
@@ -226,5 +241,60 @@ export const getUsers = async () => {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, USERS_COLLECTION);
+  }
+};
+
+// ==========================================
+// Categories API
+// ==========================================
+const CATEGORIES_COLLECTION = 'categories';
+
+export const getCategories = async () => {
+  try {
+    const q = query(collection(db, CATEGORIES_COLLECTION), orderBy('displayOrder', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    // Treat error gracefully if collection does not exist yet or displayOrder does not have index
+    try {
+      const qFallback = query(collection(db, CATEGORIES_COLLECTION));
+      const snapshot = await getDocs(qFallback);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (fallbackError) {
+      handleFirestoreError(fallbackError, OperationType.LIST, CATEGORIES_COLLECTION);
+    }
+  }
+};
+
+export const addCategory = async (categoryData: any) => {
+  try {
+    const docRef = await addDoc(collection(db, CATEGORIES_COLLECTION), {
+      ...categoryData,
+      createdAt: serverTimestamp()
+    });
+    return docRef.id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, CATEGORIES_COLLECTION);
+  }
+};
+
+export const updateCategory = async (id: string, categoryData: any) => {
+  try {
+    const docRef = doc(db, CATEGORIES_COLLECTION, id);
+    await updateDoc(docRef, {
+      ...categoryData,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `${CATEGORIES_COLLECTION}/${id}`);
+  }
+};
+
+export const deleteCategory = async (id: string) => {
+  try {
+    const docRef = doc(db, CATEGORIES_COLLECTION, id);
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `${CATEGORIES_COLLECTION}/${id}`);
   }
 };

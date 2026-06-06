@@ -1,15 +1,14 @@
 import React from 'react';
-import { Menu, Search, ShoppingBag, ArrowRight, Plus, Facebook, Instagram, Twitter } from 'lucide-react';
+import { Menu, Search, ArrowRight, Plus, Facebook, Instagram, Twitter } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
-import { CartProvider, useCart } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
-import { CartDrawer } from './components/CartDrawer';
 import { Product } from './types';
-import { Checkout, OrderSuccess } from './components/Checkout';
 import { AdminDashboard } from './components/AdminDashboard';
+import { ProductDetails } from './components/ProductDetails';
+import { SearchModal } from './components/SearchModal';
+import { ThankYou } from './components/ThankYou';
 
-const Header = ({ onMenuClick }: { onMenuClick: () => void }) => {
-  const { toggleCart, cartCount } = useCart();
+const Header = ({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSearchClick: () => void }) => {
   return (
     <header className="px-5 pt-3 pb-2 flex items-center justify-between">
       <button aria-label="Menu" className="text-brand-text" onClick={onMenuClick}>
@@ -17,37 +16,72 @@ const Header = ({ onMenuClick }: { onMenuClick: () => void }) => {
       </button>
       <h1 className="font-serif italic text-2xl tracking-tight translate-x-2">Végétal</h1>
       <div className="flex items-center gap-4">
-        <button aria-label="Search" className="text-brand-text">
+        <button aria-label="Search" className="text-brand-text" onClick={onSearchClick}>
           <Search strokeWidth={1.5} size={20} />
-        </button>
-        <button aria-label="Cart" className="relative text-brand-text pr-1" onClick={toggleCart}>
-          <ShoppingBag strokeWidth={1.5} size={20} />
-          {cartCount > 0 && (
-            <span className="absolute top-0 right-0 min-w-[15px] h-[15px] bg-brand-accent rounded-full flex items-center justify-center text-[9px] font-bold text-white translate-x-1.5 -translate-y-1.5 px-1 shadow-sm leading-none border border-white">
-              {cartCount}
-            </span>
-          )}
         </button>
       </div>
     </header>
   );
 };
 
-const Navigation = () => {
-  const links = ['Home', 'New Arrivals', 'Women', 'Men', 'Kids', 'Sale'];
+const Navigation = ({ 
+  selectedCategoryId, 
+  onSelectCategory 
+}: { 
+  selectedCategoryId: string; 
+  onSelectCategory: (id: string) => void; 
+}) => {
+  const [categories, setCategories] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchCats = async () => {
+      try {
+        const { getCategories } = await import('./firebase');
+        const list = await getCategories();
+        setCategories(list || []);
+      } catch (err) {
+        console.error("Error loading categories", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCats();
+  }, []);
+
+  if (loading) {
+    return (
+      <nav className="px-5 pb-3 overflow-x-auto no-scrollbar flex items-center gap-5">
+        <span className="text-[12px] text-neutral-400 font-medium">Loading...</span>
+      </nav>
+    );
+  }
+
   return (
     <nav className="px-5 pb-3 overflow-x-auto no-scrollbar flex items-center gap-5">
-      {links.map((link, idx) => (
-        <a
-          key={link}
-          href="#"
-          className={`shrink-0 text-[14px] ${
-            idx === 0 ? 'text-brand-text font-medium' : 'text-neutral-500 hover:text-brand-text'
-          }`}
-        >
-          {link}
-        </a>
-      ))}
+      <button
+        onClick={() => onSelectCategory('all')}
+        className={`shrink-0 text-[14px] transition-colors ${
+          selectedCategoryId === 'all' ? 'text-brand-text font-semibold' : 'text-neutral-500 hover:text-brand-text'
+        }`}
+      >
+        All
+      </button>
+
+      {categories.map((cat) => {
+        const isSelected = selectedCategoryId === cat.id;
+        return (
+          <button
+            key={cat.id}
+            onClick={() => onSelectCategory(cat.id)}
+            className={`shrink-0 text-[14px] transition-colors ${
+              isSelected ? 'text-brand-text font-semibold' : 'text-neutral-500 hover:text-brand-text'
+            }`}
+          >
+            {cat.name}
+          </button>
+        );
+      })}
     </nav>
   );
 };
@@ -69,9 +103,12 @@ const Hero = () => (
   </section>
 );
 
-const ProductCard: React.FC<Product> = (props) => {
-  const { title, name, description, image, price, rating, reviews, badge, bgColor } = props;
-  const { addToCart } = useCart();
+interface ProductCardProps extends Product {
+  onSelect?: () => void;
+}
+
+const ProductCard: React.FC<ProductCardProps> = (props) => {
+  const { title, name, description, image, price, rating, reviews, badge, bgColor, onSelect } = props;
   const bgClass = bgColor === 'gray' ? 'bg-brand-card-gray' : (bgColor === 'beige' ? 'bg-brand-card-beige' : 'bg-neutral-100');
   
   const displayTitle = name || title || 'Unnamed Product';
@@ -84,10 +121,10 @@ const ProductCard: React.FC<Product> = (props) => {
   );
 
   return (
-    <div className="flex flex-col group cursor-pointer h-full">
+    <div className="flex flex-col group cursor-pointer h-full" onClick={onSelect}>
       <div className={`relative aspect-[4/5] rounded-2xl ${image ? 'bg-neutral-100 overflow-hidden' : bgClass} mb-3 p-3 flex flex-col justify-between`}>
         {image && (
-          <img src={image} alt={displayTitle} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          <img src={image} alt={displayTitle} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" />
         )}
         <div className="relative z-10 w-full flex justify-between items-start">
           {badge ? (
@@ -96,16 +133,13 @@ const ProductCard: React.FC<Product> = (props) => {
             </div>
           ) : <div />}
         </div>
-        <button 
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); addToCart({ ...props, title: displayTitle }); }}
-          className="absolute z-10 bottom-3 right-3 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-sm hover:scale-105 active:scale-95 transition-transform text-brand-text"
-        >
-          <Plus size={18} strokeWidth={1.5} />
-        </button>
       </div>
       <div className="flex justify-between items-start gap-2 mb-1 px-1">
         <h3 className="text-[15px] font-medium leading-snug text-brand-text flex-1 line-clamp-2">{displayTitle}</h3>
-        <span className="text-[15px] font-medium text-brand-text shrink-0">${(price || 0).toFixed(2)}</span>
+        <span className="text-[15px] font-medium text-brand-text shrink-0 inline-flex gap-1" dir="ltr">
+          <span>دج</span>
+          <span>{(price || 0).toFixed(2)}</span>
+        </span>
       </div>
       {description && (
         <p className="text-[13px] text-neutral-500 px-1 mb-1 line-clamp-1">{description}</p>
@@ -122,7 +156,13 @@ const ProductCard: React.FC<Product> = (props) => {
   );
 };
 
-const BestSellers = () => {
+const BestSellers = ({ 
+  selectedCategoryId, 
+  onProductSelect 
+}: { 
+  selectedCategoryId: string; 
+  onProductSelect: (id: string) => void; 
+}) => {
   const [products, setProducts] = React.useState<Product[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -148,6 +188,13 @@ const BestSellers = () => {
     };
     fetchProducts();
   }, []);
+
+  const filteredProducts = React.useMemo(() => {
+    if (selectedCategoryId === 'all') {
+      return products;
+    }
+    return products.filter(product => product.categoryId === selectedCategoryId);
+  }, [products, selectedCategoryId]);
 
   return (
     <section className="px-4 mb-16">
@@ -177,10 +224,14 @@ const BestSellers = () => {
         <div className="py-20 text-center text-neutral-500 text-[15px]">
           No products found. Please add products to Firestore.
         </div>
+      ) : filteredProducts.length === 0 ? (
+        <div className="py-20 text-center text-neutral-500 text-[15px]">
+          No products found in this category.
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-x-4 gap-y-8">
-          {products.map((product) => (
-            <ProductCard key={product.id} {...product} />
+          {filteredProducts.map((product) => (
+            <ProductCard key={product.id} {...product} onSelect={() => onProductSelect(product.id)} />
           ))}
         </div>
       )}
@@ -239,52 +290,76 @@ const Footer = () => {
 
 export default function App() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const [view, setView] = React.useState<'home' | 'checkout' | 'success' | 'admin'>('home');
+  const [view, setView] = React.useState<'home' | 'checkout' | 'success' | 'admin' | 'details' | 'thank-you'>('home');
+  const [selectedProductId, setSelectedProductId] = React.useState<string | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = React.useState<string>('all');
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  const [confirmedOrder, setConfirmedOrder] = React.useState<{ productName: string; totalPrice: number; phoneNumber: string } | null>(null);
 
   return (
     <AuthProvider>
-      <CartProvider>
-        <div className="w-full min-h-screen flex flex-col font-sans selection:bg-brand-text selection:text-white">
-          <Sidebar isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} onNavigate={(v) => { setView(v); setIsMenuOpen(false); }} />
-          <CartDrawer onCheckout={() => setView('checkout')} />
+      <div className="w-full min-h-screen flex flex-col font-sans selection:bg-brand-text selection:text-white">
+        <Sidebar isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} onNavigate={(v) => { setView(v); setIsMenuOpen(false); }} />
 
-          {/* 
-            Using a constraint wrapper specifically to mirror the mobile-first screenshot aesthetic 
-            on larger screens, ensuring it doesn't break the layout intended by the mockups. 
-          */}
-          {view !== 'admin' ? (
-            <div className="w-full max-w-[480px] mx-auto bg-brand-bg min-h-screen flex flex-col shadow-2xl relative">
-              {view === 'home' && (
-                <>
-                  <div className="sticky top-0 z-50 bg-brand-bg/90 backdrop-blur-md">
-                    <Header onMenuClick={() => setIsMenuOpen(true)} />
-                    <Navigation />
-                  </div>
-                  
-                  <main className="flex-1 pb-10">
-                    <Hero />
-                    <BestSellers />
-                  </main>
-                  
-                  <Footer />
-                </>
-              )}
+        {/* 
+          Using a constraint wrapper specifically to mirror the mobile-first screenshot aesthetic 
+          on larger screens, ensuring it doesn't break the layout intended by the mockups. 
+        */}
+        {view !== 'admin' ? (
+          <div className="w-full max-w-[480px] mx-auto bg-brand-bg min-h-screen flex flex-col shadow-2xl relative">
+            {view === 'home' && (
+              <>
+                <div className="sticky top-0 z-50 bg-brand-bg/90 backdrop-blur-md">
+                  <Header onMenuClick={() => setIsMenuOpen(true)} onSearchClick={() => setIsSearchOpen(true)} />
+                  <Navigation selectedCategoryId={selectedCategoryId} onSelectCategory={setSelectedCategoryId} />
+                </div>
+                
+                <main className="flex-1 pb-10">
+                  <Hero />
+                  <BestSellers selectedCategoryId={selectedCategoryId} onProductSelect={(id) => { setSelectedProductId(id); setView('details'); }} />
+                </main>
+                
+                <Footer />
+              </>
+            )}
 
-              {view === 'checkout' && (
-                <Checkout onBack={() => setView('home')} onSuccess={() => setView('success')} />
-              )}
+            {view === 'details' && selectedProductId && (
+              <ProductDetails 
+                productId={selectedProductId} 
+                onBack={() => setView('home')} 
+                onOrderSuccess={(orderInfo) => {
+                  setConfirmedOrder(orderInfo);
+                  setView('thank-you');
+                }}
+              />
+            )}
 
-              {view === 'success' && (
-                <OrderSuccess onBackToHome={() => setView('home')} />
-              )}
-            </div>
-          ) : (
-            <div className="w-full min-h-screen bg-neutral-50 relative">
-              <AdminDashboard onBack={() => setView('home')} />
-            </div>
-          )}
-        </div>
-      </CartProvider>
+            {view === 'thank-you' && confirmedOrder && (
+              <ThankYou 
+                productName={confirmedOrder.productName} 
+                totalPrice={confirmedOrder.totalPrice} 
+                phone={confirmedOrder.phoneNumber} 
+                onContinue={() => setView('home')} 
+              />
+            )}
+
+            {/* Real Search Modal Overlay */}
+            <SearchModal 
+              isOpen={isSearchOpen} 
+              onClose={() => setIsSearchOpen(false)} 
+              onSelectProduct={(id) => { 
+                setSelectedProductId(id); 
+                setView('details'); 
+                setIsSearchOpen(false); 
+              }} 
+            />
+          </div>
+        ) : (
+          <div className="w-full min-h-screen bg-neutral-50 relative">
+            <AdminDashboard onBack={() => setView('home')} />
+          </div>
+        )}
+      </div>
     </AuthProvider>
   );
 }

@@ -63,7 +63,10 @@ export const AdminOverview = () => {
           </div>
           <div>
             <span className="block text-[13px] text-neutral-500 font-medium mb-1 uppercase tracking-wider">Total Sales</span>
-            <span className="block text-2xl font-serif text-brand-text">${stats.totalSales.toFixed(2)}</span>
+            <span className="block text-2xl font-serif text-brand-text inline-flex gap-1" dir="ltr">
+              <span>دج</span>
+              <span>{stats.totalSales.toFixed(2)}</span>
+            </span>
           </div>
         </div>
 

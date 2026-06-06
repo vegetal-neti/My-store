@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { logOut } from '../firebase';
-import { ArrowLeft, LayoutDashboard, ShoppingCart, Package, Users, Settings, LogOut, Menu, X } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, ShoppingCart, Package, Tag, Users, Settings, LogOut, Menu, X } from 'lucide-react';
 import { AdminOverview } from './admin/Overview';
 import { AdminOrders } from './admin/Orders';
 import { AdminProducts } from './admin/Products';
+import { AdminCategories } from './admin/Categories';
 import { AdminCustomers } from './admin/Customers';
 import { AdminSettings } from './admin/Settings';
 
 export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const { currentUser, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'products' | 'customers' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'products' | 'categories' | 'customers' | 'settings'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   if (loading) {
@@ -46,6 +47,7 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'products', label: 'Products', icon: Package },
+    { id: 'categories', label: 'Categories', icon: Tag },
     { id: 'customers', label: 'Customers', icon: Users },
     { id: 'settings', label: 'Settings', icon: Settings },
   ] as const;
@@ -140,6 +142,7 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
              {activeTab === 'dashboard' && <AdminOverview />}
              {activeTab === 'orders' && <AdminOrders />}
              {activeTab === 'products' && <AdminProducts />}
+             {activeTab === 'categories' && <AdminCategories />}
              {activeTab === 'customers' && <AdminCustomers />}
              {activeTab === 'settings' && <AdminSettings />}
            </div>

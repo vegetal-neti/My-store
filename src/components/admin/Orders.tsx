@@ -77,7 +77,10 @@ export const AdminOrders = () => {
                       {order.items?.length || 0} items
                     </td>
                     <td className="px-6 py-4 text-[14px] font-medium text-brand-text">
-                      ${(order.totalPrice || 0).toFixed(2)}
+                      <span className="inline-flex gap-1" dir="ltr">
+                        <span>دج</span>
+                        <span>{(order.totalPrice || 0).toFixed(2)}</span>
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       <select

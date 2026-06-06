@@ -5,6 +5,11 @@ export interface Product {
   price: number;
   description?: string;
   image?: string;
+  images?: string[];
+  sizes?: string[];
+  colors?: string[];
+  stock?: number;
+  category?: string;
   rating?: number;
   reviews?: number;
   badge?: string;
