@@ -290,23 +290,56 @@ const Footer = () => {
 
 export default function App() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const [view, setView] = React.useState<'home' | 'checkout' | 'success' | 'admin' | 'details' | 'thank-you'>('home');
-  const [selectedProductId, setSelectedProductId] = React.useState<string | null>(null);
+
+  // Synchronously parse initial state from current URL path before first render to prevent race conditions
+  const getInitialStateFromURL = () => {
+    const path = typeof window !== 'undefined' ? window.location.pathname : '/';
+    let initialView: 'home' | 'admin' | 'details' | 'thank-you' = 'home';
+    let initialProductId: string | null = null;
+
+    if (path === '/admin') {
+      initialView = 'admin';
+    } else if (path.startsWith('/product/')) {
+      let id = path.split('/product/')[1];
+      if (id) {
+        // Strip trailing slashes, query variables, and hashed fragments
+        id = id.split('?')[0].split('#')[0].split('/')[0];
+        if (id) {
+          initialProductId = id;
+          initialView = 'details';
+        }
+      }
+    } else if (path === '/thank-you') {
+      initialView = 'thank-you';
+    }
+
+    return { initialView, initialProductId };
+  };
+
+  const { initialView, initialProductId } = getInitialStateFromURL();
+
+  const [view, setView] = React.useState<'home' | 'checkout' | 'success' | 'admin' | 'details' | 'thank-you'>(initialView);
+  const [selectedProductId, setSelectedProductId] = React.useState<string | null>(initialProductId);
   const [selectedCategoryId, setSelectedCategoryId] = React.useState<string>('all');
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [confirmedOrder, setConfirmedOrder] = React.useState<{ productName: string; totalPrice: number; phoneNumber: string } | null>(null);
 
-  // Synchronize state with URL on initial load and browser back/forward navigation
+  // Synchronize state with URL on browser back/forward navigation
   React.useEffect(() => {
     const handleLocationChange = () => {
       const path = window.location.pathname;
       if (path === '/admin') {
         setView('admin');
       } else if (path.startsWith('/product/')) {
-        const id = path.split('/product/')[1];
+        let id = path.split('/product/')[1];
         if (id) {
-          setSelectedProductId(id);
-          setView('details');
+          id = id.split('?')[0].split('#')[0].split('/')[0];
+          if (id) {
+            setSelectedProductId(id);
+            setView('details');
+          } else {
+            setView('home');
+          }
         } else {
           setView('home');
         }
@@ -316,8 +349,6 @@ export default function App() {
         setView('home');
       }
     };
-
-    handleLocationChange();
 
     window.addEventListener('popstate', handleLocationChange);
     return () => window.removeEventListener('popstate', handleLocationChange);

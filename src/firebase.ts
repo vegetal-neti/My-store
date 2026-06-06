@@ -97,13 +97,14 @@ export const createUserProfileDocument = async (userAuth: any, additionalData: a
 
   if (!snapShot.exists()) {
     const { displayName, email, photoURL } = userAuth;
+    const role = (email === 'shoplix000@gmail.com') ? 'admin' : 'user';
     try {
       await setDoc(userRef, {
         uid: userAuth.uid,
         name: displayName,
         email,
         photoURL,
-        role: 'user',
+        role,
         createdAt: serverTimestamp(),
         ...additionalData
       });
