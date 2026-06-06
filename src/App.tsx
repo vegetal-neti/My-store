@@ -296,6 +296,51 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [confirmedOrder, setConfirmedOrder] = React.useState<{ productName: string; totalPrice: number; phoneNumber: string } | null>(null);
 
+  // Synchronize state with URL on initial load and browser back/forward navigation
+  React.useEffect(() => {
+    const handleLocationChange = () => {
+      const path = window.location.pathname;
+      if (path === '/admin') {
+        setView('admin');
+      } else if (path.startsWith('/product/')) {
+        const id = path.split('/product/')[1];
+        if (id) {
+          setSelectedProductId(id);
+          setView('details');
+        } else {
+          setView('home');
+        }
+      } else if (path === '/thank-you') {
+        setView('thank-you');
+      } else {
+        setView('home');
+      }
+    };
+
+    handleLocationChange();
+
+    window.addEventListener('popstate', handleLocationChange);
+    return () => window.removeEventListener('popstate', handleLocationChange);
+  }, []);
+
+  // Sync state changes back to standard URL paths (without reloading the page)
+  React.useEffect(() => {
+    const currentPath = window.location.pathname;
+    let expectedPath = '/';
+
+    if (view === 'admin') {
+      expectedPath = '/admin';
+    } else if (view === 'details' && selectedProductId) {
+      expectedPath = `/product/${selectedProductId}`;
+    } else if (view === 'thank-you') {
+      expectedPath = '/thank-you';
+    }
+
+    if (currentPath !== expectedPath) {
+      window.history.pushState({ view, selectedProductId }, '', expectedPath);
+    }
+  }, [view, selectedProductId]);
+
   return (
     <AuthProvider>
       <div className="w-full min-h-screen flex flex-col font-sans selection:bg-brand-text selection:text-white">
