@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Check, Loader2 } from 'lucide-react';
-import { getProductById, createOrder } from '../firebase';
+import { getProductById, createOrder, getShippingRates } from '../firebase';
 import { Product } from '../types';
+import { algeriaWilayas } from '../data/algeriaCities';
 
 interface ProductDetailsProps {
   productId: string;
@@ -11,6 +12,7 @@ interface ProductDetailsProps {
 
 export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBack, onOrderSuccess }) => {
   const [product, setProduct] = useState<Product | null>(null);
+  const [dbRates, setDbRates] = useState<Record<number, any>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -33,30 +35,48 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
   const [showErrorMsg, setShowErrorMsg] = useState(false);
 
   useEffect(() => {
-    const fetchProduct = async () => {
+    const fetchProductAndRates = async () => {
       setLoading(true);
       setError(null);
       try {
-        const data = await getProductById(productId) as any;
-        if (data) {
-          setProduct(data as Product);
+        const [prodData, ratesData] = await Promise.all([
+          getProductById(productId),
+          getShippingRates()
+        ]);
+
+        if (prodData) {
+          const prod = prodData as any;
+          setProduct(prod as Product);
           // Set initial active image
-          if (data.image) {
-            setActiveImage(data.image);
-          } else if (data.images && data.images.length > 0) {
-            setActiveImage(data.images[0]);
+          if (prod.image) {
+            setActiveImage(prod.image);
+          } else if (prod.images && prod.images.length > 0) {
+            setActiveImage(prod.images[0]);
           }
           
           // If there is only one size/color, preselect it
-          if (data.sizes && data.sizes.length === 1) {
-            setSelectedSize(data.sizes[0]);
+          if (prod.sizes && prod.sizes.length === 1) {
+            setSelectedSize(prod.sizes[0]);
           }
-          if (data.colors && data.colors.length === 1) {
-            setSelectedColor(data.colors[0]);
+          if (prod.colors && prod.colors.length === 1) {
+            setSelectedColor(prod.colors[0]);
           }
         } else {
           setError('Product not found.');
         }
+
+        // Parse ratesData into dynamic lookup map
+        const tempRates: Record<number, any> = {};
+        if (ratesData && ratesData.length > 0) {
+          ratesData.forEach((fr: any) => {
+            const wId = Number(fr.wilayaId);
+            if (wId) {
+              tempRates[wId] = fr;
+            }
+          });
+        }
+        setDbRates(tempRates);
+
       } catch (err) {
         console.error(err);
         setError('Failed to load product details.');
@@ -65,7 +85,7 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
       }
     };
     
-    fetchProduct();
+    fetchProductAndRates();
   }, [productId]);
 
   if (loading) {
@@ -96,13 +116,35 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
   // Under stock warning
   const isOutOfStock = product.stock !== undefined && product.stock <= 0;
 
-  const deliveryFee = deliveryType === 'home' ? 10.00 : 0.00;
+  const selectedWilayaObj = algeriaWilayas.find(w => w.name === state || w.nameEn === state);
+  const resolvedRateObj = selectedWilayaObj ? dbRates[selectedWilayaObj.id] : null;
+
+  const isWilayaEnabled = selectedWilayaObj 
+    ? (resolvedRateObj ? Boolean(resolvedRateObj.enabled) : true) 
+    : true;
+
+  const resolvedHomePrice = selectedWilayaObj 
+    ? (resolvedRateObj && resolvedRateObj.homePrice !== undefined ? Number(resolvedRateObj.homePrice) : selectedWilayaObj.shippingHome) 
+    : 0;
+
+  const resolvedDeskPrice = selectedWilayaObj 
+    ? (resolvedRateObj && resolvedRateObj.deskPrice !== undefined ? Number(resolvedRateObj.deskPrice) : selectedWilayaObj.shippingPickup) 
+    : 0;
+
+  const deliveryFee = state 
+    ? (deliveryType === 'home' ? resolvedHomePrice : resolvedDeskPrice)
+    : 0.00; // 0 if no state is selected yet to make it clean
   const productPrice = product.price || 0;
   const totalPrice = productPrice + deliveryFee;
 
   const handleConfirmOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isOutOfStock) return;
+
+    if (!isWilayaEnabled) {
+      alert("عذراً، التوصيل غير متوفر لهذه الولاية حالياً. / Delivery is not available for this state.");
+      return;
+    }
 
     // Validation
     const needsSizeSelection = hasSizes && !selectedSize;
@@ -198,7 +240,15 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
               </div>
             )}
             {activeImage ? (
-              <img src={activeImage} alt={product.name || product.title} className="w-full h-full object-cover transition-all duration-300" referrerPolicy="no-referrer" />
+              <>
+                <img 
+                  src={activeImage} 
+                  alt={product.name || product.title} 
+                  loading="lazy"
+                  className="w-full h-full object-cover transition-all duration-300" 
+                  referrerPolicy="no-referrer" 
+                />
+              </>
             ) : (
               <div className="w-full h-full flex items-center justify-center text-neutral-400">
                 No Image Available
@@ -217,7 +267,7 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                     activeImage === img ? 'border-brand-text scale-95 shadow-sm' : 'border-transparent opacity-75 hover:opacity-100'
                   }`}
                 >
-                  <img src={img} className="w-full h-full object-cover rounded-[10px]" alt={`thumb-${idx}`} referrerPolicy="no-referrer" />
+                  <img src={img} className="w-full h-full object-cover rounded-[10px]" alt={`thumb-${idx}`} loading="lazy" referrerPolicy="no-referrer" />
                 </button>
               ))}
             </div>
@@ -234,44 +284,33 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
           )}
 
           {/* Title & Price */}
-          <div className="flex justify-between items-start gap-4 mb-3">
-            <h2 className="font-serif text-3xl text-brand-text tracking-tight leading-tight flex-1">
+          <div className={`flex justify-between items-start gap-4 mb-3 ${/[\u0600-\u06FF]/.test(product.name || product.title || '') ? 'flex-row-reverse' : ''}`}>
+            <h2 className={`font-serif text-3xl text-brand-text tracking-tight leading-tight flex-1 ${/[\u0600-\u06FF]/.test(product.name || product.title || '') ? 'text-right' : 'text-left'}`}>
               {product.name || product.title}
             </h2>
-            <span className="font-serif text-2xl text-brand-text pt-1 shrink-0 inline-flex gap-1" dir="ltr">
-              <span>دج</span>
-              <span>{(product.price || 0).toFixed(2)}</span>
-            </span>
-          </div>
-
-          {/* Rating */}
-          {(product.rating !== undefined && product.reviews !== undefined) && (
-            <div className="flex items-center gap-1.5 mb-4">
-              <div className="flex gap-[1.5px]">
-                {[1,2,3,4,5].map(star => (
-                   <svg key={star} width="12" height="12" viewBox="0 0 24 24" fill={product.rating && product.rating >= star ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1" className="text-brand-text">
-                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                   </svg>
-                ))}
-              </div>
-              <span className="text-[12px] font-medium text-neutral-500 mt-[1px]">{product.rating} ({product.reviews} reviews)</span>
-            </div>
-          )}
-
-          {/* Cash on Delivery Badge */}
-          <div className="flex items-center gap-2.5 bg-emerald-50/60 border border-emerald-200/40 px-4 py-3 rounded-2xl mb-6 self-start">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-            <div className="text-[12px] leading-tight text-neutral-700 font-sans">
-              <span className="font-semibold text-emerald-800">الدفع عند الاستلام متاح</span>
-              <span className="text-neutral-300 mx-1.5">|</span>
-              <span className="font-medium text-emerald-800/95">Cash on Delivery Available</span>
+            <div className="shrink-0 flex flex-col items-end">
+              <span className="font-serif text-2xl font-bold text-brand-text inline-flex gap-1" dir="ltr">
+                <span className="text-[14px] font-normal opacity-90 mt-2">دج</span>
+                <span>{(product.price || 0).toFixed(0)}</span>
+              </span>
+              {product.oldPrice && product.oldPrice > product.price && (
+                <div className="flex items-center gap-1.5 mt-1 select-none">
+                  <span className="text-[13px] font-normal text-neutral-400 line-through inline-flex gap-1" dir="ltr">
+                    <span className="text-[11px] font-normal">دج</span>
+                    <span>{product.oldPrice.toFixed(0)}</span>
+                  </span>
+                  <span className="bg-red-50 text-red-600 text-[11px] font-bold px-2 py-0.5 rounded-full border border-red-200/20">
+                    -{Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)}%
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Description */}
           <div className="mb-8_">
             <h4 className="text-[12px] uppercase tracking-wider font-semibold text-neutral-400 mb-2">Description</h4>
-            <p className="text-[14px] text-neutral-600 leading-relaxed font-sans font-normal whitespace-pre-wrap mb-6">
+            <p className={`text-[14px] text-neutral-600 leading-relaxed font-sans font-normal whitespace-pre-wrap mb-6 ${/[\u0600-\u06FF]/.test(product.description || '') ? 'text-right' : 'text-left'}`}>
               {product.description || 'No description provided for this classic item.'}
             </p>
           </div>
@@ -345,29 +384,30 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
 
             {/* INSTANT ORDER SHIPPING INFORMATION */}
             <div className="bg-neutral-50 p-5 rounded-3xl border border-neutral-200/40 space-y-4">
-              <h3 className="font-serif italic text-lg text-brand-text border-b border-neutral-200/50 pb-2 flex justify-between items-center">
-                <span>Quick Order Form / نموذج الطلب السريع</span>
-                <span className="text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono font-bold">COD</span>
+              <h3 className="font-serif italic text-lg text-brand-text border-b border-neutral-200/50 pb-2 flex items-center justify-center relative">
+                <span>نموذج الطلب</span>
+                <span className="absolute left-0 text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono font-bold">COD</span>
               </h3>
               
               {/* Full name */}
               <div>
-                <label className="block text-[12px] text-neutral-500 mb-1 font-medium">
+                <label className="block text-[12px] text-neutral-500 mb-1 font-medium text-right">
                   Full Name / الاسم الكامل *
                 </label>
                 <input
                   required
                   type="text"
+                  dir="rtl"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="مثال. حمزة عبد الباسط"
-                  className="w-full bg-white border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors"
+                  className="w-full bg-white border border-neutral-200 rounded-xl px-4 py-3 text-[14px] text-right outline-none focus:border-brand-text transition-colors font-sans"
                 />
               </div>
 
               {/* Phone number */}
               <div>
-                <label className="block text-[12px] text-neutral-500 mb-1 font-medium">
+                <label className="block text-[12px] text-neutral-500 mb-1 font-medium text-right">
                   Phone Number / رقم الهاتف *
                 </label>
                 <input
@@ -382,37 +422,78 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
 
               {/* State */}
               <div>
-                <label className="block text-[12px] text-neutral-500 mb-1 font-medium">
+                <label className="block text-[12px] text-neutral-500 mb-1 font-medium text-right">
                   State / الولاية *
                 </label>
-                <input
-                  required
-                  type="text"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  placeholder="ادخل الولاية"
-                  className="w-full bg-white border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors"
-                />
+                <div className="relative">
+                  <select
+                    required
+                    value={state}
+                    onChange={(e) => {
+                      setState(e.target.value);
+                      setCity(''); // Reset selected commune on state change
+                    }}
+                    className="w-full bg-white border border-neutral-200 rounded-xl pl-10 pr-4 py-3 text-[14px] text-right outline-none focus:border-brand-text transition-colors font-sans appearance-none cursor-pointer"
+                    dir="rtl"
+                  >
+                    <option value="" disabled>-- اختر الولاية / Select State --</option>
+                    {algeriaWilayas.map((w) => (
+                      <option key={w.id} value={w.name}>
+                        {w.code} - {w.name} ({w.nameEn})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-neutral-500">
+                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                    </svg>
+                  </div>
+                </div>
               </div>
+
+              {/* Warning if Wilaya is disabled */}
+              {!isWilayaEnabled && state && (
+                <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-[12px] rounded-xl font-medium text-right leading-relaxed animate-fade-in" dir="rtl">
+                  ⚠️ عذراً، التوصيل للولاية المحددة (<b>{state}</b>) غير متوفر حالياً. يرجى اختيار ولاية أخرى للتوصيل.
+                </div>
+              )}
 
               {/* City */}
               <div>
-                <label className="block text-[12px] text-neutral-500 mb-1 font-medium">
+                <label className="block text-[12px] text-neutral-500 mb-1 font-medium text-right">
                   City / البلدية *
                 </label>
-                <input
-                  required
-                  type="text"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="ادخل البلدية"
-                  className="w-full bg-white border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors"
-                />
+                <div className="relative">
+                  <select
+                    required
+                    disabled={!state || !isWilayaEnabled}
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    className={`w-full bg-white border border-neutral-200 rounded-xl pl-10 pr-4 py-3 text-[14px] text-right outline-none focus:border-brand-text transition-colors font-sans appearance-none ${
+                      !state || !isWilayaEnabled ? 'opacity-60 cursor-not-allowed bg-neutral-100' : 'cursor-pointer'
+                    }`}
+                    dir="rtl"
+                  >
+                    <option value="" disabled>
+                      {!state ? 'الرجاء اختيار الولاية أولاً' : !isWilayaEnabled ? 'التوصيل غير متاح' : '-- اختر البلدية / Select City --'}
+                    </option>
+                    {selectedWilayaObj?.communes.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-neutral-500">
+                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                    </svg>
+                  </div>
+                </div>
               </div>
 
               {/* Delivery Type Options */}
               <div>
-                <label className="block text-[12px] text-neutral-500 mb-2 font-medium">
+                <label className="block text-[12px] text-neutral-500 mb-2 font-medium text-right">
                   Delivery Type / طريقة التوصيل *
                 </label>
                 <div className="grid grid-cols-2 gap-3">
@@ -425,8 +506,7 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                         : 'border-neutral-200 bg-neutral-50 text-neutral-500 hover:bg-neutral-100'
                     }`}
                   >
-                    <span className="text-[13px] leading-none">Home Delivery</span>
-                    <span className="text-[10px] opacity-80 font-medium">توصيل للمنزل (+10 دج)</span>
+                    <span className="text-[13px] leading-none font-medium">توصيل للمنزل</span>
                   </button>
 
                   <button
@@ -438,64 +518,46 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                         : 'border-neutral-200 bg-neutral-50 text-neutral-500 hover:bg-neutral-100'
                     }`}
                   >
-                    <span className="text-[13px] leading-none">Office Pickup</span>
-                    <span className="text-[10px] opacity-80 font-medium">استلام من المكتب (0 دج)</span>
+                    <span className="text-[13px] leading-none font-medium">استلام من المكتب</span>
                   </button>
                 </div>
               </div>
 
               {/* Dynamic Order Summary inside details page */}
               <div className="border-t border-neutral-200/50 pt-3 mt-3 space-y-2">
-                <span className="block text-[11px] uppercase tracking-wider text-neutral-400 font-semibold mb-1">
-                  Order Summary / ملخص الطلب
-                </span>
                 
-                <div className="flex justify-between text-[13px] text-neutral-600">
-                  <span className="truncate max-w-[220px]">
-                    {product.name || product.title} {selectedSize && `(${selectedSize})`} {selectedColor && `(${selectedColor})`}
-                  </span>
+                <div className="flex justify-between text-[13px] text-neutral-600" dir="rtl">
+                  <span>سعر المنتج</span>
                   <span className="inline-flex gap-1" dir="ltr">
                     <span>دج</span>
-                    <span>{productPrice.toFixed(2)}</span>
+                    <span>{productPrice.toFixed(0)}</span>
                   </span>
                 </div>
 
-                <div className="flex justify-between text-[13px] text-neutral-600">
-                  <span>Delivery Fee ({deliveryType === 'home' ? 'Home' : 'Pickup'})</span>
+                <div className="flex justify-between text-[13px] text-neutral-600" dir="rtl">
+                  <span>سعر التوصيل</span>
                   <span className="inline-flex gap-1" dir="ltr">
                     <span>دج</span>
-                    <span>{deliveryFee.toFixed(2)}</span>
+                    <span>{deliveryFee.toFixed(0)}</span>
                   </span>
                 </div>
 
-                <div className="flex justify-between text-[14px] font-semibold text-brand-text border-t border-dashed border-neutral-200 pt-2 mt-1">
-                  <span>Total Amount / المجموع الإجمالي</span>
-                  <span className="font-serif inline-flex gap-1" dir="ltr">
+                <div className="flex justify-between text-[14px] font-semibold text-brand-text border-t border-dashed border-neutral-200 pt-2 mt-1" dir="rtl">
+                  <span>المجموع الإجمالي</span>
+                  <span className="inline-flex gap-1" dir="ltr">
                     <span>دج</span>
-                    <span>{totalPrice.toFixed(2)}</span>
+                    <span>{totalPrice.toFixed(0)}</span>
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Stock status indicator */}
-            <div className="flex items-center justify-between px-1 text-[13px] text-neutral-500">
-              <span>Availability</span>
-              {isOutOfStock ? (
-                <span className="text-red-500 font-semibold uppercase tracking-wider text-[11px]">Out of stock</span>
-              ) : (
-                <span className="text-emerald-600 font-medium font-mono">
-                  {product.stock !== undefined ? `${product.stock} items remaining` : 'In Stock'}
-                </span>
-              )}
-            </div>
-
             {/* Confirm Order button */}
             <button
               type="submit"
-              disabled={isOutOfStock || isSubmitting}
+              disabled={isOutOfStock || isSubmitting || !isWilayaEnabled}
               className={`w-full py-4 rounded-full font-medium text-sm flex items-center justify-center gap-2 transition-all ${
-                isOutOfStock
+                isOutOfStock || !isWilayaEnabled
                   ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                   : isSubmitting
                   ? 'bg-neutral-800 text-white cursor-wait opacity-90'
@@ -504,6 +566,8 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
             >
               {isOutOfStock ? (
                 'Out of Stock'
+              ) : !isWilayaEnabled ? (
+                'التوصيل غير متوفر حالياً / Delivery Unavailable'
               ) : isSubmitting ? (
                 <>
                   <Loader2 size={18} className="animate-spin" />
@@ -511,7 +575,7 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                 </>
               ) : (
                 <>
-                  <span>CONFIRM ORDER | تأكيد الطلب</span>
+                  <span>تأكيد الطلب</span>
                 </>
               )}
             </button>

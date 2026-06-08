@@ -7,6 +7,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { ProductDetails } from './components/ProductDetails';
 import { SearchModal } from './components/SearchModal';
 import { ThankYou } from './components/ThankYou';
+import { AllProducts } from './components/AllProducts';
 
 const Header = ({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSearchClick: () => void }) => {
   return (
@@ -86,32 +87,100 @@ const Navigation = ({
   );
 };
 
-const Hero = () => (
-  <section className="px-4 mb-10 mt-3">
-    <div className="bg-brand-hero h-[480px] rounded-3xl p-7 flex flex-col justify-end relative overflow-hidden">
-      <p className="text-[10px] tracking-[0.2em] font-medium text-white/95 mb-3 uppercase">
-        Spring / Summer 26
-      </p>
-      <h2 className="font-serif italic text-[2.75rem] leading-[1.1] text-white mb-8">
-        The Linen Collection
-      </h2>
-      <button className="bg-white/95 hover:bg-white transition-colors text-brand-text rounded-full py-3.5 px-6 flex items-center justify-between w-[220px]">
-        <span className="text-sm font-medium">Shop New Season</span>
-        <ArrowRight size={18} strokeWidth={1.5} />
-      </button>
-    </div>
-  </section>
-);
+const Hero = ({ onCtaClick }: { onCtaClick: (categoryId: string) => void }) => {
+  const [settings, setSettings] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(true);
 
-interface ProductCardProps extends Product {
+  React.useEffect(() => {
+    const fetchHero = async () => {
+      try {
+        const { getHeroSettings } = await import('./firebase');
+        const data = await getHeroSettings();
+        if (data) {
+          setSettings(data);
+        }
+      } catch (err) {
+        console.error("Error loading hero banner details", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchHero();
+  }, []);
+
+  const badgeText = settings?.badge || 'Spring / Summer 26';
+  const titleText = settings?.title || 'The Linen Collection';
+  const descriptionText = settings?.description || '';
+  const buttonText = settings?.ctaText || 'Shop New Season';
+  const imageUrl = settings?.imageUrl;
+  const ctaLinkValue = settings?.ctaLink || 'all';
+
+  if (loading) {
+    return (
+      <section className="px-4 mb-10 mt-3">
+        <div className="bg-brand-hero/10 h-[480px] rounded-3xl flex items-center justify-center animate-pulse border border-neutral-100">
+          <div className="w-8 h-8 border-2 border-brand-text border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="px-4 mb-10 mt-3">
+      <div 
+        className="h-[480px] rounded-[2rem] p-7 flex flex-col justify-end relative overflow-hidden transition-all duration-500 hover:shadow-md"
+        style={{
+          backgroundColor: imageUrl ? 'transparent' : 'var(--color-brand-hero)',
+          backgroundImage: imageUrl ? `url('${imageUrl}')` : 'none',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        }}
+      >
+        {/* Subtle overlay to enhance text readability over user uploaded images */}
+        {imageUrl && (
+          <div className="absolute inset-0 bg-neutral-950/25 z-0" />
+        )}
+
+        <div className="relative z-10 flex flex-col items-start max-w-full">
+          {badgeText && (
+            <p className="text-[10px] tracking-[0.22em] font-semibold text-white/95 mb-3 uppercase drop-shadow-sm">
+              {badgeText}
+            </p>
+          )}
+          <h2 className="font-serif italic text-[2.5rem] md:text-[2.75rem] leading-[1.1] text-white mb-4 drop-shadow-sm max-w-md">
+            {titleText}
+          </h2>
+          {descriptionText && (
+            <p className="text-[13px] text-white/90 mb-6 leading-relaxed max-w-[280px] drop-shadow-sm">
+              {descriptionText}
+            </p>
+          )}
+          <button 
+            onClick={() => onCtaClick(ctaLinkValue)}
+            className="bg-white/95 hover:bg-white active:scale-95 transition-all text-brand-text rounded-full py-3.5 px-6 flex items-center justify-between w-[220px] shadow-sm group"
+          >
+            <span className="text-sm font-semibold tracking-wide">{buttonText}</span>
+            <ArrowRight size={18} strokeWidth={1.5} className="group-hover:translate-x-1 transition-transform" />
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+export interface ProductCardProps extends Product {
   onSelect?: () => void;
 }
 
-const ProductCard: React.FC<ProductCardProps> = (props) => {
-  const { title, name, description, image, price, rating, reviews, badge, bgColor, onSelect } = props;
+export const ProductCard: React.FC<ProductCardProps> = (props) => {
+  const { title, name, description, image, price, oldPrice, rating, reviews, badge, bgColor, onSelect } = props;
   const bgClass = bgColor === 'gray' ? 'bg-brand-card-gray' : (bgColor === 'beige' ? 'bg-brand-card-beige' : 'bg-neutral-100');
   
+  const [imageLoaded, setImageLoaded] = React.useState(false);
+  
   const displayTitle = name || title || 'Unnamed Product';
+  const isArabic = (text?: string) => text ? /[\u0600-\u06FF]/.test(text) : false;
+  const isTitleArabic = isArabic(displayTitle);
 
   // Custom SVG to replicate the exact Star icon style from the image
   const StarIcon = () => (
@@ -120,37 +189,56 @@ const ProductCard: React.FC<ProductCardProps> = (props) => {
     </svg>
   );
 
+  const hasDiscount = oldPrice && oldPrice > price;
+
   return (
     <div className="flex flex-col group cursor-pointer h-full" onClick={onSelect}>
       <div className={`relative aspect-[4/5] rounded-2xl ${image ? 'bg-neutral-100 overflow-hidden' : bgClass} mb-3 p-3 flex flex-col justify-between`}>
         {image && (
-          <img src={image} alt={displayTitle} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" />
+          <>
+            {!imageLoaded && (
+              <div className="absolute inset-0 bg-neutral-200 animate-pulse rounded-2xl" />
+            )}
+            <img 
+              src={image} 
+              alt={displayTitle} 
+              loading="lazy"
+              onLoad={() => setImageLoaded(true)}
+              className={`absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`} 
+              referrerPolicy="no-referrer" 
+            />
+          </>
         )}
-        <div className="relative z-10 w-full flex justify-between items-start">
+        <div className="relative z-10 w-full flex justify-between items-start gap-1">
           {badge ? (
             <div className="bg-white/90 backdrop-blur-sm px-3 pt-1.5 pb-1 rounded-full w-fit">
               <span className="text-[9px] font-semibold tracking-[0.05em] uppercase text-brand-text">{badge}</span>
             </div>
           ) : <div />}
+          {hasDiscount && (
+            <div className="bg-red-600 text-white font-bold text-[11px] px-2.5 py-1 rounded-full shadow-xs tracking-tight select-none">
+              -{Math.round(((oldPrice - price) / oldPrice) * 100)}%
+            </div>
+          )}
         </div>
       </div>
-      <div className="flex justify-between items-start gap-2 mb-1 px-1">
-        <h3 className="text-[15px] font-medium leading-snug text-brand-text flex-1 line-clamp-2">{displayTitle}</h3>
-        <span className="text-[15px] font-medium text-brand-text shrink-0 inline-flex gap-1" dir="ltr">
-          <span>دج</span>
-          <span>{(price || 0).toFixed(2)}</span>
-        </span>
+      <div className={`flex justify-between items-start gap-2 mb-1 px-1 ${isTitleArabic ? 'flex-row-reverse' : ''}`}>
+        <h3 className={`text-[15px] font-medium leading-snug text-brand-text flex-1 line-clamp-2 ${isTitleArabic ? 'text-right' : 'text-left'}`} dir={isTitleArabic ? 'rtl' : 'ltr'}>{displayTitle}</h3>
+        <div className="shrink-0 flex flex-col items-end">
+          <span className="text-[15px] font-bold text-brand-text inline-flex gap-1" dir="ltr">
+            <span className="text-[11px] font-normal opacity-90 mt-0.5">دج</span>
+            <span>{(price || 0).toFixed(0)}</span>
+          </span>
+          {hasDiscount && (
+            <span className="text-[11px] text-neutral-400 line-through inline-flex gap-1 mt-0.5" dir="ltr">
+              <span className="text-[9px] mt-0.5">دج</span>
+              <span>{oldPrice.toFixed(0)}</span>
+            </span>
+          )}
+        </div>
       </div>
       {description && (
-        <p className="text-[13px] text-neutral-500 px-1 mb-1 line-clamp-1">{description}</p>
-      )}
-      {(rating !== undefined && reviews !== undefined) && (
-        <div className="flex items-center gap-1.5 px-1 mt-auto pt-1">
-          <div className="flex gap-[1px]">
-            {[1, 2, 3, 4, 5].map((i) => <StarIcon key={i} />)}
-          </div>
-          <span className="text-xs text-neutral-500 mt-[1px]">{rating} ({reviews})</span>
-        </div>
+        <p className={`text-[13px] text-neutral-500 px-1 mb-1 line-clamp-1 ${isArabic(description) ? 'text-right' : 'text-left'}`} dir={isArabic(description) ? 'rtl' : 'ltr'}>{description}</p>
       )}
     </div>
   );
@@ -158,63 +246,77 @@ const ProductCard: React.FC<ProductCardProps> = (props) => {
 
 const BestSellers = ({ 
   selectedCategoryId, 
-  onProductSelect 
+  onProductSelect,
+  onViewAll
 }: { 
   selectedCategoryId: string; 
   onProductSelect: (id: string) => void; 
+  onViewAll: () => void;
 }) => {
   const [products, setProducts] = React.useState<Product[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [limitNum, setLimitNum] = React.useState(typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 16);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => {
+      const isMobile = window.innerWidth < 768;
+      const targetLimit = isMobile ? 8 : 16;
+      if (targetLimit !== limitNum) {
+        setLimitNum(targetLimit);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [limitNum]);
 
   React.useEffect(() => {
     const fetchProducts = async () => {
+      setLoading(true);
       try {
-        const { getProducts } = await import('./firebase');
-        const fetchedProducts = await getProducts();
-        if (fetchedProducts && fetchedProducts.length > 0) {
+        const { getProductsWithLimit } = await import('./firebase');
+        const fetchedProducts = await getProductsWithLimit(limitNum, selectedCategoryId);
+        if (fetchedProducts) {
           setProducts(fetchedProducts as Product[]);
         } else {
-          // If empty, we can just show empty or use fallback if we strictly want no mock.
-          // The prompt says "منع استخدام بيانات hardcoded داخل الواجهة.", so we will strictly use the fetched products.
           setProducts([]);
         }
       } catch (err: any) {
-        console.error("Firebase connection error. Please configure Firebase credentials.", err);
-        setError("Database connection error. Please set up Firebase environment variables.");
+        console.error("Firebase connection error.", err);
+        setError("Database connection error. Please search or check backend settings.");
       } finally {
         setLoading(false);
       }
     };
     fetchProducts();
-  }, []);
-
-  const filteredProducts = React.useMemo(() => {
-    if (selectedCategoryId === 'all') {
-      return products;
-    }
-    return products.filter(product => product.categoryId === selectedCategoryId);
-  }, [products, selectedCategoryId]);
+  }, [selectedCategoryId, limitNum]);
 
   return (
-    <section className="px-4 mb-16">
+    <section className="px-4 mb-16" id="best-sellers-section">
       <div className="mb-6 px-1">
-        <p className="text-[10px] tracking-[0.15em] font-semibold text-neutral-500 uppercase mb-1">
-          Loved by our community
-        </p>
         <div className="flex justify-between items-end">
           <h2 className="font-serif italic text-4xl text-brand-text leading-tight">
-            Best Sellers
+            Our Products
           </h2>
-          <a href="#" className="text-sm font-medium text-brand-text underline underline-offset-4 decoration-[1.5px] pb-1">
+          <button 
+            onClick={(e) => { e.preventDefault(); onViewAll(); }}
+            className="text-sm font-medium text-brand-text underline underline-offset-4 decoration-[1.5px] pb-1 cursor-pointer hover:opacity-80 transition-opacity"
+          >
             View All
-          </a>
+          </button>
         </div>
       </div>
       
       {loading ? (
-        <div className="flex items-center justify-center py-20 text-brand-text">
-          <div className="w-6 h-6 border-2 border-brand-text border-t-transparent rounded-full animate-spin"></div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-8">
+          {Array.from({ length: limitNum }).map((_, i) => (
+            <div key={i} className="flex flex-col animate-pulse">
+              <div className="relative aspect-[4/5] rounded-2xl bg-neutral-200 mb-3 w-full" />
+              <div className="h-4 bg-neutral-200 rounded-md w-3/4 mb-2.5" />
+              <div className="h-3 bg-neutral-200 rounded-md w-1/2" />
+            </div>
+          ))}
         </div>
       ) : error ? (
         <div className="py-10 text-center px-4 rounded-xl border border-red-200 bg-red-50 text-red-600 text-sm">
@@ -224,13 +326,9 @@ const BestSellers = ({
         <div className="py-20 text-center text-neutral-500 text-[15px]">
           No products found. Please add products to Firestore.
         </div>
-      ) : filteredProducts.length === 0 ? (
-        <div className="py-20 text-center text-neutral-500 text-[15px]">
-          No products found in this category.
-        </div>
       ) : (
         <div className="grid grid-cols-2 gap-x-4 gap-y-8">
-          {filteredProducts.map((product) => (
+          {products.map((product) => (
             <ProductCard key={product.id} {...product} onSelect={() => onProductSelect(product.id)} />
           ))}
         </div>
@@ -294,11 +392,13 @@ export default function App() {
   // Synchronously parse initial state from current URL path before first render to prevent race conditions
   const getInitialStateFromURL = () => {
     const path = typeof window !== 'undefined' ? window.location.pathname : '/';
-    let initialView: 'home' | 'admin' | 'details' | 'thank-you' = 'home';
+    let initialView: 'home' | 'admin' | 'details' | 'thank-you' | 'products' = 'home';
     let initialProductId: string | null = null;
 
     if (path === '/admin') {
       initialView = 'admin';
+    } else if (path === '/products') {
+      initialView = 'products';
     } else if (path.startsWith('/product/')) {
       let id = path.split('/product/')[1];
       if (id) {
@@ -318,7 +418,7 @@ export default function App() {
 
   const { initialView, initialProductId } = getInitialStateFromURL();
 
-  const [view, setView] = React.useState<'home' | 'checkout' | 'success' | 'admin' | 'details' | 'thank-you'>(initialView);
+  const [view, setView] = React.useState<'home' | 'checkout' | 'success' | 'admin' | 'details' | 'thank-you' | 'products'>(initialView);
   const [selectedProductId, setSelectedProductId] = React.useState<string | null>(initialProductId);
   const [selectedCategoryId, setSelectedCategoryId] = React.useState<string>('all');
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
@@ -330,6 +430,8 @@ export default function App() {
       const path = window.location.pathname;
       if (path === '/admin') {
         setView('admin');
+      } else if (path === '/products') {
+        setView('products');
       } else if (path.startsWith('/product/')) {
         let id = path.split('/product/')[1];
         if (id) {
@@ -361,6 +463,8 @@ export default function App() {
 
     if (view === 'admin') {
       expectedPath = '/admin';
+    } else if (view === 'products') {
+      expectedPath = '/products';
     } else if (view === 'details' && selectedProductId) {
       expectedPath = `/product/${selectedProductId}`;
     } else if (view === 'thank-you') {
@@ -371,6 +475,23 @@ export default function App() {
       window.history.pushState({ view, selectedProductId }, '', expectedPath);
     }
   }, [view, selectedProductId]);
+
+  // Pre-load / warm up firebase cache in background to guarantee instant route transitions
+  React.useEffect(() => {
+    const warmupCache = async () => {
+      try {
+        const { getProducts, getCategories, getShippingRates } = await import('./firebase');
+        await Promise.all([
+          getProducts(),
+          getCategories(),
+          getShippingRates()
+        ]);
+      } catch (err) {
+        console.warn("Background cache pre-warming failed:", err);
+      }
+    };
+    warmupCache();
+  }, []);
 
   return (
     <AuthProvider>
@@ -391,12 +512,47 @@ export default function App() {
                 </div>
                 
                 <main className="flex-1 pb-10">
-                  <Hero />
-                  <BestSellers selectedCategoryId={selectedCategoryId} onProductSelect={(id) => { setSelectedProductId(id); setView('details'); }} />
+                  {selectedCategoryId === 'all' && (
+                    <Hero onCtaClick={(categoryId) => {
+                      if (categoryId) {
+                        const trimmedId = categoryId.trim();
+                        const isUrl = trimmedId.startsWith('http://') || 
+                                      trimmedId.startsWith('https://') || 
+                                      trimmedId.startsWith('/') ||
+                                      (trimmedId.includes('.') && !trimmedId.includes(' ') && (trimmedId.includes('/') || trimmedId.startsWith('www.')));
+                        
+                        if (isUrl) {
+                          const destination = trimmedId.startsWith('www.') ? `https://${trimmedId}` : trimmedId;
+                          window.open(destination, '_blank', 'noopener,noreferrer');
+                        } else {
+                          setSelectedCategoryId(trimmedId);
+                          setTimeout(() => {
+                            const section = document.getElementById('best-sellers-section');
+                            if (section) {
+                              section.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }, 100);
+                        }
+                      }
+                    }} />
+                  )}
+                  <BestSellers 
+                    selectedCategoryId={selectedCategoryId} 
+                    onProductSelect={(id) => { setSelectedProductId(id); setView('details'); }} 
+                    onViewAll={() => setView('products')} 
+                  />
                 </main>
                 
                 <Footer />
               </>
+            )}
+
+            {view === 'products' && (
+              <AllProducts 
+                onBack={() => setView('home')} 
+                onProductSelect={(id) => { setSelectedProductId(id); setView('details'); }}
+                initialCategoryId={selectedCategoryId}
+              />
             )}
 
             {view === 'details' && selectedProductId && (

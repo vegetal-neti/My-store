@@ -107,9 +107,9 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack, onSuccess }) => {
                     <p className="text-neutral-500 text-[12px]">Qty: {item.quantity}</p>
                   </div>
                 </div>
-                <span className="font-medium text-brand-text inline-flex gap-1" dir="ltr">
+                 <span className="font-medium text-brand-text inline-flex gap-1" dir="ltr">
                   <span>دج</span>
-                  <span>{((item.price || 0) * item.quantity).toFixed(2)}</span>
+                  <span>{((item.price || 0) * item.quantity).toFixed(0)}</span>
                 </span>
               </div>
             ))}
@@ -122,21 +122,21 @@ export const Checkout: React.FC<CheckoutProps> = ({ onBack, onSuccess }) => {
               <span>Subtotal</span>
               <span className="inline-flex gap-1" dir="ltr">
                 <span>دج</span>
-                <span>{subtotal.toFixed(2)}</span>
+                <span>{subtotal.toFixed(0)}</span>
               </span>
             </div>
             <div className="flex justify-between text-neutral-500">
                <span>Shipping</span>
                <span className="inline-flex gap-1" dir="ltr">
                  <span>دج</span>
-                 <span>{shipping.toFixed(2)}</span>
+                 <span>{shipping.toFixed(0)}</span>
                </span>
             </div>
             <div className="flex justify-between text-[16px] font-medium text-brand-text mt-2 pt-2 border-t border-neutral-100">
                <span>Total</span>
                <span className="inline-flex gap-1" dir="ltr">
                  <span>دج</span>
-                 <span>{total.toFixed(2)}</span>
+                 <span>{total.toFixed(0)}</span>
                </span>
             </div>
           </div>

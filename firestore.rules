@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Security Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      // Direct email check for bootstrapped admin plus optional admin index lookup
+      return isSignedIn() && (
+        request.auth.token.email == 'shoplix000@gmail.com' || 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // Products Collection
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Categories Collection
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Orders Collection
+    match /orders/{orderId} {
+      allow read: if isAdmin();
+      allow create: if true; // Allow client/guest checkouts to register orders
+      allow update, delete: if isAdmin();
+    }
+
+    // Analytics Collection
+    match /analytics/{analyticsId} {
+      allow read: if isAdmin();
+      allow create, update: if true; // Let client-side guest checkouts update pre-aggregated statistics during order creation transaction
+    }
+
+    // Settings Collection (Hero configuration settings)
+    match /settings/{settingId} {
+      allow read: if true; // Publicly readable for all customers to download layout styles
+      allow write: if isAdmin(); // Only Admin can write or alter Hero presets
+      
+      // Let any checkout process increment the order counter safely
+      allow create: if settingId == 'counters'
+        && request.resource.data.keys().hasAll(['lastOrderNumber'])
+        && request.resource.data.keys().size() == 1
+        && request.resource.data.lastOrderNumber is number
+        && request.resource.data.lastOrderNumber == 1001;
+        
+      allow update: if settingId == 'counters'
+        && request.resource.data.lastOrderNumber is number
+        && request.resource.data.lastOrderNumber > 0
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastOrderNumber']);
+    }
+
+    // Shipping Rates Collection
+    match /shipping_rates/{wilayaId} {
+      allow read: if true; // Publicly readable to query rates during checkout
+      allow write: if isAdmin(); // Only Admin can update shipping rates
+    }
+  }
+}

@@ -62,7 +62,7 @@ export const ThankYou: React.FC<ThankYouProps> = ({ productName, totalPrice, pho
             <span>Total Price / المجموع الإجمالي:</span>
             <span className="font-serif inline-flex gap-1" dir="ltr">
               <span>دج</span>
-              <span>{(totalPrice || 0).toFixed(2)}</span>
+              <span>{(totalPrice || 0).toFixed(0)}</span>
             </span>
           </div>
         </div>

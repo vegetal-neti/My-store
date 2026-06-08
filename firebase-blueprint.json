@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a user registered in the system",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Represents an e-commerce product listed in the store",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "title": { "type": "string" },
+        "price": { "type": "number" },
+        "description": { "type": "string" },
+        "image": { "type": "string" },
+        "images": { "type": "array" },
+        "sizes": { "type": "array" },
+        "colors": { "type": "array" },
+        "stock": { "type": "number" },
+        "categoryId": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviews": { "type": "number" },
+        "badge": { "type": "string" },
+        "bgColor": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Main product categories for organization",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "displayOrder": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Order": {
+      "title": "Order",
+      "description": "An order created when customers purchase products",
+      "type": "object",
+      "properties": {
+        "productName": { "type": "string" },
+        "totalPrice": { "type": "number" },
+        "phoneNumber": { "type": "string" },
+        "orderNumber": { "type": "string", "description": "Unique auto-incremented order identifier, e.g., #ORD-1001" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "OrderCounter": {
+      "title": "OrderCounter",
+      "description": "Represents a centralized auto-increment counter document in Firestore",
+      "type": "object",
+      "properties": {
+        "lastOrderNumber": { "type": "number", "description": "The last processed order counter number" }
+      },
+      "required": ["lastOrderNumber"]
+    },
+    "Analytics": {
+      "title": "Analytics",
+      "description": "Pre-aggregated e-commerce metrics and stats stored in a single dashboard document",
+      "type": "object",
+      "properties": {
+        "globalStats": { "type": "object" },
+        "dailyStats": { "type": "object" },
+        "weeklyStats": { "type": "object" },
+        "wilayaStats": { "type": "object" },
+        "productStats": { "type": "object" }
+      }
+    },
+    "HeroSettings": {
+      "title": "HeroSettings",
+      "description": "Dynamic configuration parameters for the storefront header hero banner",
+      "type": "object",
+      "properties": {
+        "imageUrl": { "type": "string", "description": "URL of the background image" },
+        "badge": { "type": "string", "description": "Dynamic top tag label text" },
+        "title": { "type": "string", "description": "Display heading text" },
+        "description": { "type": "string", "description": "Middle paragraph description" },
+        "ctaText": { "type": "string", "description": "Call to action button text" },
+        "ctaLink": { "type": "string", "description": "Target redirection link URL" }
+      }
+    },
+    "ShippingRate": {
+      "title": "ShippingRate",
+      "description": "Represents shipping fees and status for an Algerian Wilaya",
+      "type": "object",
+      "properties": {
+        "wilayaId": { "type": "number" },
+        "wilayaName": { "type": "string" },
+        "wilayaNameEn": { "type": "string" },
+        "homePrice": { "type": "number" },
+        "deskPrice": { "type": "number" },
+        "enabled": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["wilayaId", "wilayaName", "homePrice", "deskPrice", "enabled"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles synchronized upon Google login"
+    },
+    "products/{productId}": {
+      "schema": "Product",
+      "description": "Available products offered on Shoplix"
+    },
+    "categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Grouping entities to categorize store items"
+    },
+    "orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer purchase transaction records"
+    },
+    "settings/{settingName}": {
+      "schema": "HeroSettings",
+      "description": "Global general storefront configuration settings document"
+    },
+    "settings/counters": {
+      "schema": "OrderCounter",
+      "description": "Centralized, concurrency-safe counter for generating unique sequential order IDs"
+    },
+    "analytics/{analyticsId}": {
+      "schema": "Analytics",
+      "description": "Pre-aggregated analytical historical metrics for the storefront dashboard"
+    },
+    "shipping_rates/{wilayaId}": {
+      "schema": "ShippingRate",
+      "description": "Individual shipping rates per Algerian Wilaya"
+    }
+  }
+}

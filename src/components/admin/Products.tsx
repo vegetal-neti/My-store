@@ -9,11 +9,13 @@ export const AdminProducts = () => {
   const [isEditing, setIsEditing] = useState<any | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   // Form Fields
   const [formData, setFormData] = useState({
     title: '',
     price: '',
+    oldPrice: '',
     image: '',
     description: '',
     bgColor: 'beige',
@@ -59,12 +61,36 @@ export const AdminProducts = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
+
+    const priceVal = parseFloat(formData.price) || 0;
+    const oldPriceStr = formData.oldPrice ? formData.oldPrice.trim() : '';
+    let oldPriceVal: number | null = null;
+    let discountPercentageVal: number | null = null;
+
+    if (oldPriceStr !== '') {
+      const parsed = parseFloat(oldPriceStr);
+      if (isNaN(parsed) || parsed <= 0) {
+        setError('يرجى إدخال قيمة صحيحة للسعر القديم أو تركه فارغاً.');
+        setLoading(false);
+        return;
+      }
+      if (parsed <= priceVal) {
+        setError('خطأ: السعر القديم (Old Price) يجب أن يكون أكبر من السعر الحالي (Price)!');
+        setLoading(false);
+        return;
+      }
+      oldPriceVal = parsed;
+      discountPercentageVal = Math.round(((parsed - priceVal) / parsed) * 100);
+    }
 
     const productData = {
       title: formData.title,
       name: formData.title, // keep name and title synchronized
-      price: parseFloat(formData.price) || 0,
+      price: priceVal,
+      oldPrice: oldPriceVal,
+      discountPercentage: discountPercentageVal,
       image: formData.image || (formData.imagesInput.length > 0 ? formData.imagesInput[0] : ''),
       description: formData.description,
       bgColor: formData.bgColor,
@@ -87,8 +113,8 @@ export const AdminProducts = () => {
       await fetchProducts();
       setIsAdding(false);
       setIsEditing(null);
-    } catch (error) {
-      console.error("Error saving product:", error);
+    } catch (err) {
+      console.error("Error saving product:", err);
     } finally {
       setLoading(false);
     }
@@ -109,9 +135,11 @@ export const AdminProducts = () => {
 
   const startEdit = (product: any) => {
     setIsEditing(product);
+    setError(null);
     setFormData({
       title: product.title || product.name || '',
       price: product.price?.toString() || '0',
+      oldPrice: product.oldPrice?.toString() || '',
       image: product.image || '',
       description: product.description || '',
       bgColor: product.bgColor || 'beige',
@@ -133,9 +161,11 @@ export const AdminProducts = () => {
   const startAdd = () => {
     setIsAdding(true);
     setIsEditing(null);
+    setError(null);
     setFormData({
       title: '',
       price: '',
+      oldPrice: '',
       image: '',
       description: '',
       bgColor: 'beige',
@@ -156,6 +186,7 @@ export const AdminProducts = () => {
   const cancelEditAdd = () => {
     setIsAdding(false);
     setIsEditing(null);
+    setError(null);
   };
 
   // List manipulation helpers
@@ -233,15 +264,20 @@ export const AdminProducts = () => {
             <input required type="text" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors" placeholder="e.g. Linen Blend Shirt" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Price */}
             <div>
-              <label className="block text-[13px] text-neutral-500 mb-1 ml-1 font-medium">Price (دج)</label>
+              <label className="block text-[13px] text-neutral-500 mb-1 ml-1 font-semibold">Price / السعر الحالي (دج)</label>
               <input required type="number" step="0.01" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors" placeholder="0.00" />
+            </div>
+            {/* Old Price */}
+            <div>
+              <label className="block text-[13px] text-neutral-500 mb-1 ml-1 font-semibold">Old Price / السعر قبل الخصم (دج)</label>
+              <input type="number" step="0.01" value={formData.oldPrice} onChange={e => setFormData({...formData, oldPrice: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors" placeholder="Optional (اختياري)" />
             </div>
             {/* Stock */}
             <div>
-              <label className="block text-[13px] text-neutral-500 mb-1 ml-1 font-medium">Stock Quantity</label>
+              <label className="block text-[13px] text-neutral-500 mb-1 ml-1 font-semibold">Stock / كمية المخزون</label>
               <input required type="number" min="0" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors" />
             </div>
           </div>
@@ -354,6 +390,13 @@ export const AdminProducts = () => {
             <textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors min-h-[100px] resize-y" placeholder="Full summary details of the linen garment..." />
           </div>
           
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-600 font-semibold text-[13px] flex items-center gap-2" dir="rtl">
+              <span>⚠️</span>
+              <span>{error}</span>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-4">
             <button type="submit" disabled={loading} className="flex-1 bg-brand-text text-white py-3.5 rounded-full font-medium text-[14px] hover:bg-neutral-800 transition-colors disabled:opacity-70">
               {loading ? 'Saving...' : 'Save Product'}
@@ -409,11 +452,22 @@ export const AdminProducts = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-[14px] font-medium text-brand-text">
-                      <span className="inline-flex gap-1" dir="ltr">
-                        <span>دج</span>
-                        <span>{(product.price || 0).toFixed(2)}</span>
-                      </span>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-[14px] font-bold text-brand-text" dir="ltr">
+                          {(product.price || 0).toFixed(0)} دج
+                        </span>
+                        {product.oldPrice && product.oldPrice > product.price && (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[11px] font-normal text-neutral-400 line-through/80" dir="ltr">
+                              {product.oldPrice.toFixed(0)} دج
+                            </span>
+                            <span className="bg-red-50 text-red-600 text-[10px] font-bold px-1 py-0.2 rounded">
+                              -{Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)}%
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-[13px]">
                       {product.stock !== undefined ? (
