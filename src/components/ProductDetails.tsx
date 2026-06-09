@@ -260,19 +260,7 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
       );
 
       if (isFlashBundleActive) {
-        const basePrice = product.price || 0;
-        let maxSaving = 0;
-        let bestIdx = 0;
-        const tiers = product.flashBundle?.tiers || [];
-        tiers.forEach((tier, idx) => {
-          const originalTotal = basePrice * tier.quantity;
-          const savedAmount = originalTotal - tier.bundlePrice;
-          if (savedAmount > maxSaving) {
-            maxSaving = savedAmount;
-            bestIdx = idx;
-          }
-        });
-        setSelectedBundleIdx(bestIdx);
+        setSelectedBundleIdx(0);
       } else {
         setSelectedBundleIdx(-1);
       }
@@ -1072,8 +1060,12 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
               
               {/* Full name */}
               <div>
-                <label className="block text-[12px] text-neutral-500 mb-1 font-medium text-right">
-                  Full Name / الاسم الكامل *
+                <label className="flex items-center gap-1.5 justify-start text-[12px] text-neutral-500 mb-1 font-medium" dir="rtl">
+                  <svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                  <span>الاسم الكامل / Full Name</span>
                 </label>
                 <input
                   required
@@ -1096,8 +1088,11 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
 
               {/* Phone number */}
               <div>
-                <label className="block text-[12px] text-neutral-500 mb-1 font-medium text-right">
-                  Phone Number / رقم الهاتف *
+                <label className="flex items-center gap-1.5 justify-start text-[12px] text-neutral-500 mb-1 font-medium" dir="rtl">
+                  <svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                  </svg>
+                  <span>رقم الهاتف / Phone Number</span>
                 </label>
                 <input
                   required
@@ -1119,8 +1114,12 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
 
               {/* State */}
               <div>
-                <label className="block text-[12px] text-neutral-500 mb-1 font-medium text-right">
-                  State / الولاية *
+                <label className="flex items-center gap-1.5 justify-start text-[12px] text-neutral-500 mb-1 font-medium" dir="rtl">
+                  <svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  <span>الولاية / State</span>
                 </label>
                 <div className="relative">
                   <select
@@ -1162,8 +1161,18 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
 
               {/* City */}
               <div>
-                <label className="block text-[12px] text-neutral-500 mb-1 font-medium text-right">
-                  City / البلدية *
+                <label className="flex items-center gap-1.5 justify-start text-[12px] text-neutral-500 mb-1 font-medium" dir="rtl">
+                  <svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
+                    <line x1="9" y1="22" x2="9" y2="16" />
+                    <line x1="15" y1="22" x2="15" y2="16" />
+                    <line x1="9" y1="16" x2="15" y2="16" />
+                    <path d="M8 6h.01" />
+                    <path d="M16 6h.01" />
+                    <path d="M8 10h.01" />
+                    <path d="M16 10h.01" />
+                  </svg>
+                  <span>البلدية / City</span>
                 </label>
                 <div className="relative">
                   <select
@@ -1203,8 +1212,14 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
 
               {/* Delivery Type Options */}
               <div>
-                <label className="block text-[12px] text-neutral-500 mb-2 font-medium text-right">
-                  Delivery Type / طريقة التوصيل *
+                <label className="flex items-center gap-1.5 justify-start text-[12px] text-neutral-500 mb-2 font-medium" dir="rtl">
+                  <svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="1" y="3" width="15" height="13" rx="2" ry="2" />
+                    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+                    <circle cx="5.5" cy="18.5" r="2.5" />
+                    <circle cx="18.5" cy="18.5" r="2.5" />
+                  </svg>
+                  <span>طريقة التوصيل / Delivery Type</span>
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
