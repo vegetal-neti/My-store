@@ -7,6 +7,7 @@ export const AdminCategories = () => {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState<any | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Form Fields
   const [formData, setFormData] = useState({
@@ -57,16 +58,21 @@ export const AdminCategories = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this category? Products linked to this category won't be deleted, but may lose link.")) {
-      setLoading(true);
-      try {
-        await deleteCategory(id);
-        await fetchCategories();
-      } catch (error) {
-        console.error("Error deleting category:", error);
-        setLoading(false);
-      }
+  const handleDeleteClick = (id: string) => {
+    setConfirmDeleteId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteId) return;
+    setLoading(true);
+    try {
+      await deleteCategory(confirmDeleteId);
+      await fetchCategories();
+    } catch (error) {
+      console.error("Error deleting category:", error);
+    } finally {
+      setConfirmDeleteId(null);
+      setLoading(false);
     }
   };
 
@@ -205,7 +211,7 @@ export const AdminCategories = () => {
                         <Edit2 size={16} />
                       </button>
                       <button 
-                        onClick={() => handleDelete(cat.id)} 
+                        onClick={() => handleDeleteClick(cat.id)} 
                         className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
                       >
                         <Trash2 size={16} />
@@ -218,6 +224,38 @@ export const AdminCategories = () => {
           </table>
         </div>
       </div>
+
+      {/* Custom Confirmation Modal */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-neutral-100 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-[17px] font-bold text-neutral-900 border-b border-neutral-100 pb-2 flex items-center gap-2">
+              ⚠️ حذف الفئة / Delete Category
+            </h3>
+            <p className="text-neutral-600 text-[14px] leading-relaxed">
+              هل أنت متأكد من رغبتك في حذف هذه الفئة ؟ لن يتم حذف المنتجات المرتبطة بها ولكن قد ينقطع ارتباطها بالفئة.
+            </p>
+            <div className="flex gap-2.5 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteId(null)}
+                className="px-4 py-2 rounded-full border border-neutral-200 text-neutral-600 text-[13px] font-semibold hover:bg-neutral-50 transition-colors"
+                disabled={loading}
+              >
+                إلغاء / Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-5 py-2 rounded-full bg-red-600 text-white text-[13px] font-semibold hover:bg-red-700 transition-colors flex items-center gap-1.5 shadow-sm"
+                disabled={loading}
+              >
+                {loading ? 'جاري الحذف...' : 'نعم، تأكيد الحذف / Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

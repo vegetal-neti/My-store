@@ -4,6 +4,95 @@ import { getProductById, createOrder, getShippingRates } from '../firebase';
 import { Product } from '../types';
 import { algeriaWilayas } from '../data/algeriaCities';
 
+const colorFallbackMap: Record<string, string> = {
+  oatmeal: '#E0D4C3',
+  sage: '#8F9779',
+  charcoal: '#36454F',
+  ivory: '#FFFFF0',
+  white: '#FFFFFF',
+  black: '#000000',
+  red: '#FF1212',
+  blue: '#123FFF',
+  green: '#12FF3F',
+  yellow: '#FFFF12',
+};
+
+const getCleanedColors = (colors: any[] | undefined | null) => {
+  if (!colors || !Array.isArray(colors)) return [];
+  
+  const seenNames = new Set<string>();
+  return colors
+    .map(col => {
+      if (!col) return null;
+      
+      // If col is a string
+      if (typeof col === 'string') {
+        const trimmed = col.trim();
+        if (!trimmed) return null;
+        
+        // Check if it is already a valid HEX code (e.g. #000000)
+        if (/^#([0-9A-F]{3}|[0-9A-F]{6})$/i.test(trimmed)) {
+          return {
+            colorName: trimmed,
+            colorCode: trimmed
+          };
+        }
+        
+        // Otherwise check if it maps to a mapped fallback
+        const mappedCode = colorFallbackMap[trimmed.toLowerCase()];
+        if (mappedCode && /^#([0-9A-F]{3}|[0-9A-F]{6})$/i.test(mappedCode)) {
+          return {
+            colorName: trimmed,
+            colorCode: mappedCode
+          };
+        }
+        
+        return null;
+      }
+      
+      // If col is an object
+      if (typeof col === 'object') {
+        const name = col.colorName?.trim() || '';
+        let code = col.colorCode?.trim() || '';
+        
+        if (!name) return null;
+        
+        // If code is empty, check fallback map by name
+        if (!code) {
+          const mappedCode = colorFallbackMap[name.toLowerCase()];
+          if (mappedCode) {
+            code = mappedCode;
+          }
+        } else {
+          // If code is not empty but isn't a hex format, resolve it
+          if (!code.startsWith('#')) {
+            const mappedCode = colorFallbackMap[code.toLowerCase()];
+            if (mappedCode) {
+              code = mappedCode;
+            }
+          }
+        }
+        
+        // Must strictly be a valid Hex code
+        if (code && /^#([0-9A-F]{3}|[0-9A-F]{6})$/i.test(code)) {
+          return {
+            colorName: name,
+            colorCode: code
+          };
+        }
+      }
+      
+      return null;
+    })
+    .filter((c): c is { colorName: string; colorCode: string } => {
+      if (c === null) return false;
+      const normalizedName = c.colorName.trim().toLowerCase();
+      if (seenNames.has(normalizedName)) return false;
+      seenNames.add(normalizedName);
+      return true;
+    });
+};
+
 interface ProductDetailsProps {
   productId: string;
   onBack: () => void;
@@ -33,6 +122,13 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
   
   // Form validation/submit states
   const [showErrorMsg, setShowErrorMsg] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<{
+    fullName?: string;
+    phone?: string;
+    state?: string;
+    city?: string;
+    submit?: string;
+  }>({});
 
   useEffect(() => {
     const fetchProductAndRates = async () => {
@@ -58,8 +154,9 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
           if (prod.sizes && prod.sizes.length === 1) {
             setSelectedSize(prod.sizes[0]);
           }
-          if (prod.colors && prod.colors.length === 1) {
-            setSelectedColor(prod.colors[0]);
+          const cleanedColorsList = getCleanedColors(prod.colors);
+          if (cleanedColorsList.length === 1) {
+            setSelectedColor(cleanedColorsList[0].colorName);
           }
         } else {
           setError('Product not found.');
@@ -111,7 +208,8 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
 
   // Check if options are configured in Firestore
   const hasSizes = product.sizes && product.sizes.length > 0;
-  const hasColors = product.colors && product.colors.length > 0;
+  const cleanedColors = getCleanedColors(product.colors);
+  const hasColors = cleanedColors.length > 0;
   
   // Under stock warning
   const isOutOfStock = product.stock !== undefined && product.stock <= 0;
@@ -137,6 +235,129 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
   const productPrice = product.price || 0;
   const totalPrice = productPrice + deliveryFee;
 
+  // Real-time Order Form Validation Handlers
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setFullName(val);
+    
+    if (!val) {
+      setValidationErrors(prev => ({ ...prev, fullName: undefined }));
+      return;
+    }
+
+    const trimmed = val.trim();
+    if (trimmed.length > 0 && !/^[a-zA-Z\s\u0600-\u06FF]+$/.test(trimmed)) {
+      setValidationErrors(prev => ({ ...prev, fullName: "الاسم غير صالح" }));
+    } else {
+      setValidationErrors(prev => {
+        if (prev.fullName === "الاسم غير صالح" || (trimmed.length >= 3 && prev.fullName === "الاسم قصير جدا")) {
+          return { ...prev, fullName: undefined };
+        }
+        return prev;
+      });
+    }
+  };
+
+  const handleNameBlur = () => {
+    const trimmed = fullName.trim();
+    if (!trimmed) {
+      setValidationErrors(prev => ({ ...prev, fullName: "مطلوب" }));
+    } else if (!/^[a-zA-Z\s\u0600-\u06FF]+$/.test(trimmed)) {
+      setValidationErrors(prev => ({ ...prev, fullName: "الاسم غير صالح" }));
+    } else if (trimmed.length < 3) {
+      setValidationErrors(prev => ({ ...prev, fullName: "الاسم قصير جدا" }));
+    } else {
+      setValidationErrors(prev => ({ ...prev, fullName: undefined }));
+    }
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setPhone(val);
+
+    if (!val) {
+      setValidationErrors(prev => ({ ...prev, phone: undefined }));
+      return;
+    }
+
+    const isValidStart = (val.length === 1 && val === '0') || 
+                         (val.length >= 2 && ['05', '06', '07'].includes(val.slice(0, 2)));
+
+    if (!isValidStart) {
+      setValidationErrors(prev => ({ ...prev, phone: "يجب أن يبدأ بـ 05 / 06 / 07" }));
+    } else {
+      setValidationErrors(prev => {
+        if (val.length === 10 && prev.phone === "يجب أن يتكون من 10 أرقام") {
+          return { ...prev, phone: undefined };
+        }
+        if (prev.phone === "يجب أن يبدأ بـ 05 / 06 / 07") {
+          return { ...prev, phone: undefined };
+        }
+        return prev;
+      });
+    }
+  };
+
+  const handlePhoneBlur = () => {
+    const trimmed = phone.trim();
+    if (!trimmed) {
+      setValidationErrors(prev => ({ ...prev, phone: "مطلوب" }));
+      return;
+    }
+
+    if (!/^\d+$/.test(trimmed)) {
+      setValidationErrors(prev => ({ ...prev, phone: "رقم غير صالح" }));
+      return;
+    }
+
+    if (!/^(05|06|07)/.test(trimmed)) {
+      setValidationErrors(prev => ({ ...prev, phone: "يجب أن يبدأ بـ 05 / 06 / 07" }));
+      return;
+    }
+
+    if (trimmed.length !== 10) {
+      setValidationErrors(prev => ({ ...prev, phone: "يجب أن يتكون من 10 أرقام" }));
+      return;
+    }
+
+    setValidationErrors(prev => ({ ...prev, phone: undefined }));
+  };
+
+  const handleStateChange = (val: string) => {
+    setState(val);
+    setCity('');
+    if (!val.trim()) {
+      setValidationErrors(prev => ({ ...prev, state: "مطلوب" }));
+    } else {
+      setValidationErrors(prev => ({ ...prev, state: undefined }));
+    }
+  };
+
+  const handleStateBlur = () => {
+    if (!state.trim()) {
+      setValidationErrors(prev => ({ ...prev, state: "مطلوب" }));
+    } else {
+      setValidationErrors(prev => ({ ...prev, state: undefined }));
+    }
+  };
+
+  const handleCityChange = (val: string) => {
+    setCity(val);
+    if (!val.trim()) {
+      setValidationErrors(prev => ({ ...prev, city: "مطلوب" }));
+    } else {
+      setValidationErrors(prev => ({ ...prev, city: undefined }));
+    }
+  };
+
+  const handleCityBlur = () => {
+    if (!city.trim()) {
+      setValidationErrors(prev => ({ ...prev, city: "مطلوب" }));
+    } else {
+      setValidationErrors(prev => ({ ...prev, city: undefined }));
+    }
+  };
+
   const handleConfirmOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isOutOfStock) return;
@@ -160,18 +381,66 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
       return;
     }
 
-    if (!fullName.trim() || !phone.trim() || !state.trim() || !city.trim()) {
+    const errors: typeof validationErrors = {};
+
+    // 1. Full name validation
+    const trimmedName = fullName.trim();
+    if (!trimmedName) {
+      errors.fullName = "مطلوب";
+    } else if (trimmedName.length < 3) {
+      errors.fullName = "الاسم قصير جدا";
+    } else if (!/^[a-zA-Z\s\u0600-\u06FF]+$/.test(trimmedName)) {
+      errors.fullName = "الاسم غير صالح";
+    }
+
+    // 2. Phone validation
+    const trimmedPhone = phone.trim();
+    if (!trimmedPhone) {
+      errors.phone = "مطلوب";
+    } else if (!/^\d+$/.test(trimmedPhone)) {
+      errors.phone = "رقم غير صالح";
+    } else if (!/^(05|06|07)/.test(trimmedPhone)) {
+      errors.phone = "يجب أن يبدأ بـ 05 / 06 / 07";
+    } else if (trimmedPhone.length !== 10) {
+      errors.phone = "يجب أن يتكون من 10 أرقام";
+    }
+
+    // 3. State check
+    if (!state.trim()) {
+      errors.state = "مطلوب";
+    }
+
+    // 4. City check
+    if (!city.trim()) {
+      errors.city = "مطلوب";
+    }
+
+    // 5. Cooldown check
+    if (trimmedPhone && !errors.phone) {
+      const cooldownKey = `cooldown_phone_${trimmedPhone}`;
+      const lastSubmitTime = localStorage.getItem(cooldownKey);
+      if (lastSubmitTime) {
+        const diff = Date.now() - Number(lastSubmitTime);
+        if (diff < 90000) { // 90 seconds cooldown
+          errors.submit = "حاول مرة أخرى لاحقاً";
+        }
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
       return;
     }
 
+    setValidationErrors({});
     setShowErrorMsg(false);
     setIsSubmitting(true);
 
     try {
       const orderData = {
         customerInfo: {
-          fullName: fullName.trim(),
-          phone: phone.trim(),
+          fullName: trimmedName,
+          phone: trimmedPhone,
           state: state.trim(),
           city: city.trim()
         },
@@ -195,11 +464,14 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
 
       await createOrder(orderData);
       
+      // Set submission cooldown
+      localStorage.setItem(`cooldown_phone_${trimmedPhone}`, Date.now().toString());
+      
       // Fire success callback upwards to trigger thank-you transition
       onOrderSuccess({
         productName: product.name || product.title || '',
         totalPrice,
-        phoneNumber: phone.trim()
+        phoneNumber: trimmedPhone
       });
     } catch (err) {
       console.error("Order verification failed:", err);
@@ -324,22 +596,24 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                   <span className="text-[12px] uppercase tracking-wider font-semibold text-neutral-400">Color / اللون</span>
                   {selectedColor && <span className="text-[12px] font-medium text-brand-text">{selectedColor}</span>}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {product.colors?.map((col) => {
-                    const isSelected = selectedColor === col;
+                <div className="flex flex-wrap gap-3">
+                  {cleanedColors.map((col, index) => {
+                    const name = col.colorName;
+                    const code = col.colorCode;
+                    const isSelected = selectedColor === name;
                     return (
                       <button
-                        key={col}
+                        key={index}
                         type="button"
-                        onClick={() => { setSelectedColor(col); setShowErrorMsg(false); }}
-                        className={`px-4 py-2.5 rounded-full text-[13px] font-medium transition-all ${
+                        onClick={() => { setSelectedColor(name); setShowErrorMsg(false); }}
+                        className={`w-9 h-9 rounded-full transition-all focus:outline-none relative flex justify-center items-center ${
                           isSelected
-                            ? 'bg-brand-text text-white shadow-sm'
-                            : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
+                            ? 'ring-2 ring-black ring-offset-2 scale-95 shadow-sm'
+                            : 'hover:scale-105 border border-neutral-300/60'
                         }`}
-                      >
-                        {col}
-                      </button>
+                        style={{ backgroundColor: code }}
+                        title={name}
+                      />
                     );
                   })}
                 </div>
@@ -361,9 +635,9 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                         key={sz}
                         type="button"
                         onClick={() => { setSelectedSize(sz); setShowErrorMsg(false); }}
-                        className={`w-11 h-11 rounded-full text-[13px] font-semibold transition-all border flex items-center justify-center ${
+                        className={`min-w-[3.5rem] h-10 px-5 rounded-[10px] text-[13px] font-semibold transition-all border flex items-center justify-center ${
                           isSelected
-                            ? 'bg-brand-text text-white border-brand-text shadow-sm'
+                            ? 'bg-black text-white border-black shadow-sm'
                             : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:border-neutral-400'
                         }`}
                       >
@@ -399,10 +673,18 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                   type="text"
                   dir="rtl"
                   value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
+                  onChange={handleNameChange}
+                  onBlur={handleNameBlur}
                   placeholder="مثال. حمزة عبد الباسط"
-                  className="w-full bg-white border border-neutral-200 rounded-xl px-4 py-3 text-[14px] text-right outline-none focus:border-brand-text transition-colors font-sans"
+                  className={`w-full bg-white border rounded-xl px-4 py-3 text-[14px] text-right outline-none focus:border-brand-text transition-colors font-sans ${
+                    validationErrors.fullName ? 'border-red-400 focus:border-red-400' : 'border-neutral-200'
+                  }`}
                 />
+                {validationErrors.fullName && (
+                  <p className="text-red-500 text-[11px] text-right mt-1 font-medium select-none" dir="rtl">
+                    {validationErrors.fullName}
+                  </p>
+                )}
               </div>
 
               {/* Phone number */}
@@ -414,10 +696,18 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                   required
                   type="tel"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={handlePhoneChange}
+                  onBlur={handlePhoneBlur}
                   placeholder="05/06/07XXXXXXXX"
-                  className="w-full bg-white border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors"
+                  className={`w-full bg-white border rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors ${
+                    validationErrors.phone ? 'border-red-400 focus:border-red-400' : 'border-neutral-200'
+                  }`}
                 />
+                {validationErrors.phone && (
+                  <p className="text-red-500 text-[11px] text-right mt-1 font-medium select-none" dir="rtl">
+                    {validationErrors.phone}
+                  </p>
+                )}
               </div>
 
               {/* State */}
@@ -429,11 +719,11 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                   <select
                     required
                     value={state}
-                    onChange={(e) => {
-                      setState(e.target.value);
-                      setCity(''); // Reset selected commune on state change
-                    }}
-                    className="w-full bg-white border border-neutral-200 rounded-xl pl-10 pr-4 py-3 text-[14px] text-right outline-none focus:border-brand-text transition-colors font-sans appearance-none cursor-pointer"
+                    onChange={(e) => handleStateChange(e.target.value)}
+                    onBlur={handleStateBlur}
+                    className={`w-full bg-white border rounded-xl pl-10 pr-4 py-3 text-[14px] text-right outline-none focus:border-brand-text transition-colors font-sans appearance-none cursor-pointer ${
+                      validationErrors.state ? 'border-red-400 focus:border-red-400' : 'border-neutral-200'
+                    }`}
                     dir="rtl"
                   >
                     <option value="" disabled>-- اختر الولاية / Select State --</option>
@@ -449,6 +739,11 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                     </svg>
                   </div>
                 </div>
+                {validationErrors.state && (
+                  <p className="text-red-500 text-[11px] text-right mt-1 font-medium select-none" dir="rtl">
+                    {validationErrors.state}
+                  </p>
+                )}
               </div>
 
               {/* Warning if Wilaya is disabled */}
@@ -468,9 +763,12 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                     required
                     disabled={!state || !isWilayaEnabled}
                     value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    className={`w-full bg-white border border-neutral-200 rounded-xl pl-10 pr-4 py-3 text-[14px] text-right outline-none focus:border-brand-text transition-colors font-sans appearance-none ${
+                    onChange={(e) => handleCityChange(e.target.value)}
+                    onBlur={handleCityBlur}
+                    className={`w-full bg-white border rounded-xl pl-10 pr-4 py-3 text-[14px] text-right outline-none focus:border-brand-text transition-colors font-sans appearance-none ${
                       !state || !isWilayaEnabled ? 'opacity-60 cursor-not-allowed bg-neutral-100' : 'cursor-pointer'
+                    } ${
+                      validationErrors.city ? 'border-red-400 focus:border-red-400' : 'border-neutral-200'
                     }`}
                     dir="rtl"
                   >
@@ -489,6 +787,11 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                     </svg>
                   </div>
                 </div>
+                {validationErrors.city && (
+                  <p className="text-red-500 text-[11px] text-right mt-1 font-medium select-none" dir="rtl">
+                    {validationErrors.city}
+                  </p>
+                )}
               </div>
 
               {/* Delivery Type Options */}
@@ -552,6 +855,13 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
               </div>
             </div>
 
+            {/* Validation global/submit errors (cooldown) */}
+            {validationErrors.submit && (
+              <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-[12px] rounded-xl font-medium text-right leading-relaxed animate-fade-in" dir="rtl">
+                ⚠️ {validationErrors.submit}
+              </div>
+            )}
+
             {/* Confirm Order button */}
             <button
               type="submit"
@@ -580,6 +890,29 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
               )}
             </button>
           </form>
+
+          {/* Product Detail Images (Descriptive full-bleeding sequence similar to AliExpress / Shein) */}
+          {product.detailImages && product.detailImages.length > 0 && (
+            <div className="mt-12 border-t border-neutral-150 pt-8" id="product-detail-images-section">
+              <div className="mb-6 text-center">
+                <h3 className="font-serif italic text-2xl text-brand-text">تفاصيل المنتج</h3>
+                <p className="text-[11px] text-neutral-400 tracking-wider uppercase mt-1">Product Details</p>
+              </div>
+              <div className="space-y-4 flex flex-col items-center">
+                {product.detailImages.map((imageUrl, idx) => (
+                  <div key={idx} className="w-full relative overflow-hidden bg-white/50 rounded-2xl border border-neutral-200/50">
+                    <img
+                      src={imageUrl}
+                      alt={`Product detail explanatory visual ${idx + 1}`}
+                      loading="lazy"
+                      className="w-full h-auto object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       </div>
     </div>

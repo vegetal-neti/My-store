@@ -1,7 +1,98 @@
 import React, { useEffect, useState } from 'react';
-import { getProducts, addProduct, updateProduct, deleteProduct, getCategories } from '../../firebase';
-import { Edit2, Trash2, Plus, X, Image as ImageIcon } from 'lucide-react';
+import { getProducts, addProduct, updateProduct, deleteProduct, getCategories, getColors, addColorDoc, updateColorDoc, deleteColorDoc } from '../../firebase';
+import { Edit2, Trash2, Plus, X, Image as ImageIcon, Check, Edit3 } from 'lucide-react';
 import { ProductImageUpload } from './ProductImageUpload';
+import { ProductDetailImagesUpload } from './ProductDetailImagesUpload';
+
+const colorFallbackMap: Record<string, string> = {
+  oatmeal: '#E0D4C3',
+  sage: '#8F9779',
+  charcoal: '#36454F',
+  ivory: '#FFFFF0',
+  white: '#FFFFFF',
+  black: '#000000',
+  red: '#FF1212',
+  blue: '#123FFF',
+  green: '#12FF3F',
+  yellow: '#FFFF12',
+};
+
+const safeConfirm = (message: string): boolean => {
+  try {
+    return window.confirm(message);
+  } catch (e) {
+    console.warn("Window confirm blocked in sandboxed iframe:", e);
+    return true; // Safe fallback to let users proceed when dialogs are blocked by iframe sandbox
+  }
+};
+
+export const normalizeProductColors = (colorsArray: any[]) => {
+  if (!Array.isArray(colorsArray)) return [];
+  const seenNames = new Set<string>();
+  return colorsArray
+    .map((c: any) => {
+      if (!c) return null;
+      if (typeof c === 'string') {
+        const trimmed = c.trim();
+        if (!trimmed) return null;
+        
+        if (/^#([0-9A-F]{3}|[0-9A-F]{6})$/i.test(trimmed)) {
+          return {
+            colorName: trimmed,
+            colorCode: trimmed
+          };
+        }
+        
+        const mappedCode = colorFallbackMap[trimmed.toLowerCase()];
+        if (mappedCode && /^#([0-9A-F]{3}|[0-9A-F]{6})$/i.test(mappedCode)) {
+          return {
+            colorName: trimmed,
+            colorCode: mappedCode
+          };
+        }
+        
+        return null;
+      }
+      
+      if (typeof c === 'object') {
+        const name = c.colorName?.trim() || '';
+        let code = c.colorCode?.trim() || '';
+        if (!name) return null;
+        
+        // If code is empty, check fallback map by name
+        if (!code) {
+          const mappedCode = colorFallbackMap[name.toLowerCase()];
+          if (mappedCode) {
+            code = mappedCode;
+          }
+        } else {
+          // If code is not empty but isn't a hex format, resolve it
+          if (!code.startsWith('#')) {
+            const mappedCode = colorFallbackMap[code.toLowerCase()];
+            if (mappedCode) {
+              code = mappedCode;
+            }
+          }
+        }
+        
+        // Must strictly be a valid Hex code
+        if (code && /^#([0-9A-F]{3}|[0-9A-F]{6})$/i.test(code)) {
+          return {
+            colorName: name,
+            colorCode: code
+          };
+        }
+      }
+      return null;
+    })
+    .filter((c): c is { colorName: string; colorCode: string } => {
+      if (c === null) return false;
+      const normalizedName = c.colorName.trim().toLowerCase();
+      if (seenNames.has(normalizedName)) return false;
+      seenNames.add(normalizedName);
+      return true;
+    });
+};
 
 export const AdminProducts = () => {
   const [products, setProducts] = useState<any[]>([]);
@@ -10,6 +101,25 @@ export const AdminProducts = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Colors state
+  const [globalColors, setGlobalColors] = useState<any[]>([]);
+  const [newColorName, setNewColorName] = useState('');
+  const [newColorCode, setNewColorCode] = useState('#000000');
+  
+  // State for editing an existing global color
+  const [editingColor, setEditingColor] = useState<any | null>(null);
+  const [editColorName, setEditColorName] = useState('');
+  const [editColorCode, setEditColorCode] = useState('#000000');
+
+  // Confirmation state for deleting products/colors
+  const [confirmDelete, setConfirmDelete] = useState<{
+    type: 'product' | 'color';
+    id: string;
+    title: string;
+    message: string;
+    extra?: any;
+  } | null>(null);
 
   // Form Fields
   const [formData, setFormData] = useState({
@@ -25,18 +135,19 @@ export const AdminProducts = () => {
     categoryId: '',
     stock: '10',
     imagesInput: [] as string[],
+    detailImagesInput: [] as string[],
     sizesInput: [] as string[],
-    colorsInput: [] as string[]
+    colorsInput: [] as any[]
   });
 
   // Local state for adding individual elements to lists
   const [newImageUrl, setNewImageUrl] = useState('');
   const [newSize, setNewSize] = useState('');
-  const [newColor, setNewColor] = useState('');
 
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+    fetchColors();
   }, []);
 
   const fetchProducts = async () => {
@@ -54,6 +165,15 @@ export const AdminProducts = () => {
     try {
       const data = await getCategories();
       setCategoriesList(data || []);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const fetchColors = async () => {
+    try {
+      const data = await getColors();
+      setGlobalColors(data || []);
     } catch (error) {
       console.error(error);
     }
@@ -100,6 +220,7 @@ export const AdminProducts = () => {
       categoryId: formData.categoryId || '',
       stock: parseInt(formData.stock) || 0,
       images: formData.imagesInput,
+      detailImages: formData.detailImagesInput,
       sizes: formData.sizesInput,
       colors: formData.colorsInput
     };
@@ -120,16 +241,51 @@ export const AdminProducts = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this product?")) {
-      setLoading(true);
-      try {
-        await deleteProduct(id);
+  const handleDeleteClick = (id: string, productTitle: string) => {
+    setConfirmDelete({
+      type: 'product',
+      id,
+      title: 'حذف المنتج / Delete Product',
+      message: `هل أنت متأكد من رغبتك في حذف المنتج "${productTitle}"؟ لا يمكن التراجع عن هذا الإجراء.`
+    });
+  };
+
+  const handleDeleteColorClick = (color: any) => {
+    setConfirmDelete({
+      type: 'color',
+      id: color.id,
+      title: 'حذف اللون / Delete Color',
+      message: `هل أنت متأكد من رغبتك في حذف لون "${color.colorName}" (${color.colorCode})؟ سيتم إزالته من كافة المنتجات والخيارات المرتبطة به.`,
+      extra: color
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDelete) return;
+    setLoading(true);
+    try {
+      if (confirmDelete.type === 'product') {
+        await deleteProduct(confirmDelete.id);
         await fetchProducts();
-      } catch (error) {
-        console.error("Error deleting product:", error);
-        setLoading(false);
+      } else if (confirmDelete.type === 'color') {
+        const color = confirmDelete.extra;
+        await deleteColorDoc(color.id, color.colorName, color.colorCode);
+        
+        // Update local state by filtering out de-selected color
+        setFormData(prev => ({
+          ...prev,
+          colorsInput: prev.colorsInput.filter(c => !(c && typeof c === 'object' && (c.colorName?.trim().toLowerCase() === color.colorName?.trim().toLowerCase())))
+        }));
+
+        const freshPool = await getColors();
+        setGlobalColors(freshPool || []);
+        await fetchProducts();
       }
+    } catch (err) {
+      console.error("Error during deletion execution:", err);
+    } finally {
+      setConfirmDelete(null);
+      setLoading(false);
     }
   };
 
@@ -149,13 +305,13 @@ export const AdminProducts = () => {
       categoryId: product.categoryId || '',
       stock: product.stock?.toString() || '10',
       imagesInput: product.images || [],
+      detailImagesInput: product.detailImages || [],
       sizesInput: product.sizes || [],
-      colorsInput: product.colors || []
+      colorsInput: normalizeProductColors(product.colors || [])
     });
     setIsAdding(false);
     setNewImageUrl('');
     setNewSize('');
-    setNewColor('');
   };
 
   const startAdd = () => {
@@ -175,12 +331,12 @@ export const AdminProducts = () => {
       categoryId: '',
       stock: '10',
       imagesInput: [],
+      detailImagesInput: [],
       sizesInput: ['XS', 'S', 'M', 'L', 'XL'], // Default sizes
-      colorsInput: ['Oatmeal', 'Sage', 'Charcoal', 'Ivory'] // Default colors
+      colorsInput: [] // Start empty, check default ones from global pool
     });
     setNewImageUrl('');
     setNewSize('');
-    setNewColor('');
   };
 
   const cancelEditAdd = () => {
@@ -225,22 +381,127 @@ export const AdminProducts = () => {
     }));
   };
 
-  const appendColor = () => {
-    const formattedColor = newColor.trim();
-    if (formattedColor && !formData.colorsInput.includes(formattedColor)) {
+  // Global pool / local selection colors routines
+  const handleToggleProductColor = (color: any) => {
+    const isSelected = formData.colorsInput.some(c => 
+      c && typeof c === 'object' && 
+      c.colorName?.trim().toLowerCase() === color.colorName?.trim().toLowerCase()
+    );
+    if (isSelected) {
       setFormData(prev => ({
         ...prev,
-        colorsInput: [...prev.colorsInput, formattedColor]
+        colorsInput: prev.colorsInput.filter(c => 
+          !(c && typeof c === 'object' && c.colorName?.trim().toLowerCase() === color.colorName?.trim().toLowerCase())
+        )
       }));
-      setNewColor('');
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        colorsInput: [...prev.colorsInput, { colorName: color.colorName, colorCode: color.colorCode }]
+      }));
     }
   };
 
-  const removeColor = (colorToRemove: string) => {
-    setFormData(prev => ({
-      ...prev,
-      colorsInput: prev.colorsInput.filter(c => c !== colorToRemove)
-    }));
+  const handleAddNewColorToPool = async () => {
+    const name = newColorName.trim();
+    let code = newColorCode.trim();
+
+    if (!name) {
+      alert('Please enter a color name. / يرجى إدخال اسم اللون.');
+      return;
+    }
+    if (!code) {
+      alert('Please select or specify a HEX code. / يرجى إدخال كود لون HEX.');
+      return;
+    }
+    if (!code.startsWith('#')) {
+      code = '#' + code;
+    }
+    if (!/^#[0-9A-F]{6}$/i.test(code)) {
+      alert('Color code must be a valid 6-character hex. (e.g. #000000)');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const newId = await addColorDoc({ colorName: name, colorCode: code });
+      
+      // Auto toggle to current product colors too
+      setFormData(prev => ({
+        ...prev,
+        colorsInput: [...prev.colorsInput, { id: newId, colorName: name, colorCode: code }]
+      }));
+
+      // Refresh global pool
+      const freshPool = await getColors();
+      setGlobalColors(freshPool || []);
+
+      setNewColorName('');
+      setNewColorCode('#000000');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Removing deleted global color function replaced by custom state handler
+
+  const handleStartEditColor = (color: any) => {
+    setEditingColor(color);
+    setEditColorName(color.colorName);
+    setEditColorCode(color.colorCode);
+  };
+
+  const handleSaveEditColor = async () => {
+    if (!editingColor) return;
+    const name = editColorName.trim();
+    let code = editColorCode.trim();
+
+    if (!name) {
+      alert('Please specify a color name.');
+      return;
+    }
+    if (!code) {
+      alert('Please specify a HEX code.');
+      return;
+    }
+    if (!code.startsWith('#')) {
+      code = '#' + code;
+    }
+    if (!/^#[0-9A-F]{6}$/i.test(code)) {
+      alert('Invalid HEX format. e.g. #000000');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await updateColorDoc(editingColor.id, {
+        colorName: name,
+        colorCode: code,
+        oldColorName: editingColor.colorName,
+        oldColorCode: editingColor.colorCode
+      });
+
+      // Synchronize currently editing product selection list as well
+      setFormData(prev => ({
+        ...prev,
+        colorsInput: prev.colorsInput.map(c => {
+          if (c && typeof c === 'object' && (c.id === editingColor.id || (c.colorName === editingColor.colorName && c.colorCode === editingColor.colorCode))) {
+            return { id: editingColor.id, colorName: name, colorCode: code };
+          }
+          return c;
+        })
+      }));
+
+      const freshPool = await getColors();
+      setGlobalColors(freshPool || []);
+      setEditingColor(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (loading && !products.length) {
@@ -278,7 +539,7 @@ export const AdminProducts = () => {
             {/* Stock */}
             <div>
               <label className="block text-[13px] text-neutral-500 mb-1 ml-1 font-semibold">Stock / كمية المخزون</label>
-              <input required type="number" min="0" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors" />
+              <input required type="number" min="0" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-brand-text transition-colors animate-none" />
             </div>
           </div>
 
@@ -332,6 +593,12 @@ export const AdminProducts = () => {
             setImages={(urls) => setFormData(p => ({ ...p, imagesInput: urls }))}
           />
 
+          {/* Product Detail Images (Descriptive / Long illustrative images below the form) */}
+          <ProductDetailImagesUpload
+            detailImages={formData.detailImagesInput}
+            setDetailImages={(urls) => setFormData(p => ({ ...p, detailImagesInput: urls }))}
+          />
+
           {/* Sizes Management */}
           <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200/50">
             <label className="block text-[13px] text-neutral-500 mb-2 font-semibold">Manage Sizes</label>
@@ -358,30 +625,162 @@ export const AdminProducts = () => {
             </div>
           </div>
 
-          {/* Colors Management */}
-          <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200/50">
-            <label className="block text-[13px] text-neutral-500 mb-2 font-semibold">Manage Colors</label>
-            <div className="flex gap-2">
-              <input type="text" value={newColor} onChange={e => setNewColor(e.target.value)} className="flex-1 bg-white border border-neutral-200 rounded-xl px-4 py-2.5 text-[13px] outline-none focus:border-brand-text transition-colors" placeholder="e.g. Oatmeal, Sage, Soft Linen, Navy" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); appendColor(); } }} />
-              <button type="button" onClick={appendColor} className="bg-white hover:bg-neutral-100 text-brand-text px-4 py-2.5 rounded-xl border border-neutral-200 text-[13px] font-medium transition-colors shrink-0">
-                Add Color
-              </button>
+          {/* Colors Management (Durable Reusable Color Code Pool) */}
+          <div className="bg-neutral-50 p-5 rounded-xl border border-neutral-200/50 space-y-4">
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-[13px] font-semibold text-neutral-700">Manage Colors / نظام إدارة الألوان</label>
+                <span className="text-[11px] text-neutral-400">Professional hex system</span>
+              </div>
+              
+              {/* Creator Inline Box */}
+              <div className="bg-white p-3.5 rounded-xl border border-neutral-200/60 space-y-3 mt-1.5">
+                <span className="text-[11px] font-bold text-brand-text block">➕ Create New Reusable Color / إضافة لون جديد للمتجر</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 mb-0.5">Color Name / اسم اللون</label>
+                    <input 
+                      type="text" 
+                      value={newColorName} 
+                      onChange={e => setNewColorName(e.target.value)} 
+                      className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-brand-text transition-colors" 
+                      placeholder="e.g. Sage, Soft Linen, Oatmeal" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 mb-0.5">Color Code (HEX) / كود اللون</label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input 
+                          type="text" 
+                          value={newColorCode} 
+                          onChange={e => setNewColorCode(e.target.value)} 
+                          className="w-full bg-neutral-50 border border-neutral-200 rounded-xl pl-9 pr-3 py-2 text-[12px] outline-none focus:border-brand-text transition-colors font-mono" 
+                          placeholder="#000000" 
+                        />
+                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded border border-neutral-300" style={{ backgroundColor: newColorCode }} />
+                      </div>
+                      <input 
+                        type="color" 
+                        value={newColorCode.startsWith('#') && newColorCode.length === 7 ? newColorCode : '#000000'} 
+                        onChange={e => setNewColorCode(e.target.value)} 
+                        className="w-10 h-8 rounded cursor-pointer border border-neutral-200 p-0" 
+                      />
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={handleAddNewColorToPool} 
+                  className="w-full bg-black text-white hover:bg-neutral-800 py-2 rounded-xl text-[12px] font-medium transition-colors"
+                >
+                  + Add Color / إضافة اللون للخيارات
+                </button>
+              </div>
             </div>
-            
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {formData.colorsInput.length === 0 ? (
-                <span className="text-[12px] text-neutral-400 italic">No custom colors enabled (fallback default color)</span>
-              ) : (
-                formData.colorsInput.map((col) => (
-                  <span key={col} className="inline-flex items-center gap-1.5 bg-white border border-neutral-200 text-[13px] px-3 py-1 rounded-full font-medium text-brand-text">
-                    {col}
-                    <button type="button" onClick={() => removeColor(col)} className="text-red-400 hover:text-red-500 rounded-full">
-                      <X size={12} strokeWidth={2.5} />
+
+            {/* Checkbox Selector lists for the current product */}
+            <div className="space-y-2">
+              <span className="text-[12px] font-semibold text-neutral-600 block">Select Colors for this Product: / اختر ألوان هذا المنتج:</span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-44 overflow-y-auto p-1.5 border border-neutral-200 bg-white rounded-xl">
+                {globalColors.map((color) => {
+                  const isSelected = formData.colorsInput.some(c => 
+                    c && typeof c === 'object' && 
+                    c.colorName?.trim().toLowerCase() === color.colorName?.trim().toLowerCase()
+                  );
+                  return (
+                    <button
+                      key={color.id}
+                      type="button"
+                      onClick={() => handleToggleProductColor(color)}
+                      className={`flex items-center gap-2 p-2 rounded-lg border text-[11px] font-medium transition-all text-left ${
+                        isSelected 
+                          ? 'border-black bg-neutral-50 font-semibold text-black' 
+                          : 'border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300'
+                      }`}
+                    >
+                      <span className="w-3.5 h-3.5 rounded-full border border-neutral-300 shrink-0" style={{ backgroundColor: color.colorCode }} />
+                      <span className="truncate flex-1">{color.colorName}</span>
+                      {isSelected && <Check size={11} className="text-black shrink-0" strokeWidth={3} />}
                     </button>
-                  </span>
-                ))
-              )}
+                  );
+                })}
+                {globalColors.length === 0 && (
+                  <p className="col-span-full text-center text-neutral-400 text-[11px] py-4">No colors in global directory. Add one above!</p>
+                )}
+              </div>
             </div>
+
+            {/* Editing Global Color Inline Card */}
+            {editingColor && (
+              <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 space-y-2.5">
+                <span className="text-[11px] font-bold text-blue-900 block">✏️ Edit Global Color / تعديل اللون: {editingColor.colorName}</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <input 
+                    type="text" 
+                    value={editColorName} 
+                    onChange={e => setEditColorName(e.target.value)} 
+                    className="bg-white border border-neutral-200 rounded-lg p-1.5 text-[11px] outline-none" 
+                    placeholder="Color Name" 
+                  />
+                  <div className="flex gap-1.5">
+                    <input 
+                      type="text" 
+                      value={editColorCode} 
+                      onChange={e => setEditColorCode(e.target.value)} 
+                      className="bg-white border border-neutral-200 rounded-lg p-1.5 text-[11px] outline-none font-mono flex-1" 
+                      placeholder="#HEX" 
+                    />
+                    <input 
+                      type="color" 
+                      value={editColorCode.startsWith('#') && editColorCode.length === 7 ? editColorCode : '#000000'} 
+                      onChange={e => setEditColorCode(e.target.value)} 
+                      className="w-8 h-7 px-0 cursor-pointer border border-neutral-200" 
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button type="button" onClick={() => setEditingColor(null)} className="px-2.5 py-1 rounded bg-neutral-200 text-neutral-700 text-[10px] font-medium">Cancel</button>
+                  <button type="button" onClick={handleSaveEditColor} className="px-3 py-1 rounded bg-blue-600 text-white text-[10px] font-medium">Save Changes</button>
+                </div>
+              </div>
+            )}
+
+            {/* List and manage global colors pool */}
+            {globalColors.length > 0 && (
+              <div className="border-t border-neutral-200/50 pt-3">
+                <span className="text-[10px] font-semibold text-neutral-400 block mb-1.5 uppercase">Store Colors Library Management (Click Edit or X to Delete)</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {globalColors.map((color) => (
+                    <div key={color.id} className="group relative flex items-center gap-1.5 bg-white border border-neutral-200 rounded-lg py-1 pl-2 pr-11 text-[11px] hover:border-neutral-400 transition-colors">
+                      <span className="w-3 h-3 rounded-full border border-neutral-300 shrink-0" style={{ backgroundColor: color.colorCode }} />
+                      <span className="font-medium text-neutral-700">{color.colorName}</span>
+                      <span className="text-[9px] text-neutral-400 font-mono">{color.colorCode}</span>
+                      
+                      {/* Edit click */}
+                      <button 
+                        type="button" 
+                        onClick={() => handleStartEditColor(color)} 
+                        className="absolute right-6 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-blue-500 transition-colors p-0.5"
+                        title="Edit local values"
+                      >
+                        <Edit3 size={11} />
+                      </button>
+
+                      {/* Delete click */}
+                      <button 
+                        type="button" 
+                        onClick={() => handleDeleteColorClick(color)} 
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 text-neutral-300 hover:text-red-500 transition-colors p-0.5"
+                        title="Delete color from store library"
+                      >
+                        <X size={11} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Description */}
@@ -406,6 +805,38 @@ export const AdminProducts = () => {
             </button>
           </div>
         </form>
+
+        {/* Custom Confirmation Modal */}
+        {confirmDelete && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-neutral-100 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+              <h3 className="text-[17px] font-bold text-neutral-900 border-b border-neutral-100 pb-2 flex items-center gap-2">
+                ⚠️ {confirmDelete.title}
+              </h3>
+              <p className="text-neutral-600 text-[14px] leading-relaxed">
+                {confirmDelete.message}
+              </p>
+              <div className="flex gap-2.5 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(null)}
+                  className="px-4 py-2 rounded-full border border-neutral-200 text-neutral-600 text-[13px] font-semibold hover:bg-neutral-50 transition-colors"
+                  disabled={loading}
+                >
+                  إلغاء / Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  className="px-5 py-2 rounded-full bg-red-600 text-white text-[13px] font-semibold hover:bg-red-700 transition-colors flex items-center gap-1.5 shadow-sm"
+                  disabled={loading}
+                >
+                  {loading ? 'جاري الحذف...' : 'نعم، تأكيد الحذف / Confirm'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -485,9 +916,18 @@ export const AdminProducts = () => {
                             <span className="font-semibold text-neutral-600">Sz:</span> {product.sizes.join(', ')}
                           </div>
                         )}
-                        {product.colors && product.colors.length > 0 && (
-                          <div className="truncate max-w-[120px]">
-                            <span className="font-semibold text-neutral-600">Col:</span> {product.colors.join(', ')}
+                        {normalizeProductColors(product.colors).length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap max-w-[150px] mt-0.5">
+                            {normalizeProductColors(product.colors).map((c: any, index: number) => {
+                              const name = c.colorName;
+                              const code = c.colorCode;
+                              return (
+                                <span key={index} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-neutral-100 text-[9px] font-medium text-neutral-600" title={name}>
+                                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: code }} />
+                                  {name}
+                                </span>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -496,7 +936,7 @@ export const AdminProducts = () => {
                       <button onClick={() => startEdit(product)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-full transition-colors mr-1">
                         <Edit2 size={16} />
                       </button>
-                      <button onClick={() => handleDelete(product.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors">
+                      <button onClick={() => handleDeleteClick(product.id, product.title || product.name || 'Unnamed')} className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors">
                         <Trash2 size={16} />
                       </button>
                     </td>
@@ -507,6 +947,38 @@ export const AdminProducts = () => {
           </table>
         </div>
       </div>
+
+      {/* Custom Confirmation Modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-neutral-100 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-[17px] font-bold text-neutral-900 border-b border-neutral-100 pb-2 flex items-center gap-2">
+              ⚠️ {confirmDelete.title}
+            </h3>
+            <p className="text-neutral-600 text-[14px] leading-relaxed">
+              {confirmDelete.message}
+            </p>
+            <div className="flex gap-2.5 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 rounded-full border border-neutral-200 text-neutral-600 text-[13px] font-semibold hover:bg-neutral-50 transition-colors"
+                disabled={loading}
+              >
+                إلغاء / Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-5 py-2 rounded-full bg-red-600 text-white text-[13px] font-semibold hover:bg-red-700 transition-colors flex items-center gap-1.5 shadow-sm"
+                disabled={loading}
+              >
+                {loading ? 'جاري الحذف...' : 'نعم، تأكيد الحذف / Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

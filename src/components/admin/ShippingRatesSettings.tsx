@@ -134,22 +134,20 @@ export const AdminShippingRatesSettings: React.FC = () => {
   };
 
   const handleResetToDefaults = () => {
-    if (window.confirm('هل أنت متأكد من رغبتك في إعادة تعيين الحقول الحالية للقيم الافتراضية؟ (لن يتم حفظها في قاعدة البيانات حتى تضغط زر الحفظ)')) {
-      const resetMap: Record<number, ShippingRate> = {};
-      algeriaWilayas.forEach((w) => {
-        resetMap[w.id] = {
-          wilayaId: w.id,
-          wilayaName: w.name,
-          wilayaNameEn: w.nameEn,
-          homePrice: w.shippingHome,
-          deskPrice: w.shippingPickup,
-          enabled: true,
-        };
-      });
-      setRates(resetMap);
-      setSaveStatus({});
-      setSuccessMsg('تمت إعادة تعيين القيم المعروضة للقيم الافتراضية بنجاح.');
-    }
+    const resetMap: Record<number, ShippingRate> = {};
+    algeriaWilayas.forEach((w) => {
+      resetMap[w.id] = {
+        wilayaId: w.id,
+        wilayaName: w.name,
+        wilayaNameEn: w.nameEn,
+        homePrice: w.shippingHome,
+        deskPrice: w.shippingPickup,
+        enabled: true,
+      };
+    });
+    setRates(resetMap);
+    setSaveStatus({});
+    setSuccessMsg('تمت إعادة تعيين القيم المعروضة للقيم الافتراضية بنجاح.');
   };
 
   // Filter 58 Wilayas based on Arabic name, English name, or Code

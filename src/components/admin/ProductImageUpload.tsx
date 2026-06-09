@@ -451,10 +451,8 @@ export const ProductImageUpload: React.FC<ProductImageUploadProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      if (confirm("هل تريد إلغاء وإغلاق مسودة العمل؟")) {
-                        setPendingImages([]);
-                        setActivePendingIdx(null);
-                      }
+                      setPendingImages([]);
+                      setActivePendingIdx(null);
                     }}
                     className="p-1.5 hover:bg-neutral-100 rounded-full text-neutral-400 hover:text-neutral-600 transition-colors shrink-0"
                   >

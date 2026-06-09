@@ -1,3 +1,9 @@
+export interface ProductColor {
+  id?: string;
+  colorName: string;
+  colorCode: string;
+}
+
 export interface Product {
   id: string;
   name?: string;
@@ -7,8 +13,9 @@ export interface Product {
   description?: string;
   image?: string;
   images?: string[];
+  detailImages?: string[];
   sizes?: string[];
-  colors?: string[];
+  colors?: any[];
   stock?: number;
   category?: string;
   rating?: number;

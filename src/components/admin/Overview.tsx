@@ -18,14 +18,15 @@ export const AdminOverview = () => {
   const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [recalcState, setRecalcState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [showRecalcConfirm, setShowRecalcConfirm] = useState(false);
 
   const handleRecalculate = async () => {
     if (recalcState === 'loading') return;
-    const confirmRecalc = window.confirm(
-      "هل أنت متأكد من رغبتك في إعادة بناء إحصائيات النظام بالكامل؟\n\nستقوم هذه العملية بمراجعة ومطابقة كافة الطلبات الحالية وإصلاح أي فروقات في البيانات."
-    );
-    if (!confirmRecalc) return;
+    setShowRecalcConfirm(true);
+  };
 
+  const handleConfirmRecalculate = async () => {
+    setShowRecalcConfirm(false);
     setRecalcState('loading');
     try {
       await emergencyRecalculateAnalytics();
@@ -34,7 +35,6 @@ export const AdminOverview = () => {
     } catch (err) {
       console.error("Recalculation failed:", err);
       setRecalcState('error');
-      setTimeout(() => setRecalcState('idle'), 3050);
       setTimeout(() => setRecalcState('idle'), 3000);
     }
   };
@@ -331,6 +331,36 @@ export const AdminOverview = () => {
           );
         })}
       </div>
+
+      {/* Recalculate Custom Confirmation Modal */}
+      {showRecalcConfirm && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-neutral-100 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150 text-right" dir="rtl">
+            <h3 className="text-[17px] font-bold text-neutral-900 border-b border-neutral-100 pb-2 flex items-center gap-2">
+              ⚠️ مراجعة وإعادة بناء الإحصائيات
+            </h3>
+            <p className="text-neutral-600 text-[14px] leading-relaxed">
+              هل أنت متأكد من رغبتك في إعادة بناء إحصائيات النظام بالكامل؟ ستقوم هذه العملية بمراجعة ومطابقة كافة الطلبات الحالية وإصلاح أي فروقات في البيانات.
+            </p>
+            <div className="flex gap-2.5 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowRecalcConfirm(false)}
+                className="px-4 py-2 rounded-full border border-neutral-200 text-neutral-600 text-[13px] font-semibold hover:bg-neutral-50 transition-colors"
+              >
+                إلغاء / Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRecalculate}
+                className="px-5 py-2 rounded-full bg-rose-600 text-white text-[13px] font-semibold hover:bg-rose-700 transition-colors shadow-sm"
+              >
+                نعم، ابدأ المطابقة والعد
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
