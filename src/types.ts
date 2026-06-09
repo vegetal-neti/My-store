@@ -24,6 +24,15 @@ export interface Product {
   bgColor?: 'gray' | 'beige';
   size?: string;
   color?: string;
+  flashBundle?: {
+    enabled: boolean;
+    startDate?: string;
+    endDate?: string;
+    tiers: Array<{
+      quantity: number;
+      bundlePrice: number;
+    }>;
+  };
 }
 
 export interface CartItem extends Product {
@@ -79,6 +88,13 @@ export interface Order {
   deliveryType: 'home' | 'desk';
   deliveryFee: number;
   createdAt?: any;
+  bundleEnabled?: boolean;
+  bundleQuantity?: number;
+  bundlePrice?: number;
+  originalPrice?: number;
+  savedAmount?: number;
+  savedPercentage?: number;
+  flashOfferId?: string;
 }
 
 

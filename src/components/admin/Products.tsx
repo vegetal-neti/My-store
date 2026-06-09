@@ -57,6 +57,7 @@ export const normalizeProductColors = (colorsArray: any[]) => {
       if (typeof c === 'object') {
         const name = c.colorName?.trim() || '';
         let code = c.colorCode?.trim() || '';
+        const imageUrl = c.imageUrl || '';
         if (!name) return null;
         
         // If code is empty, check fallback map by name
@@ -79,13 +80,14 @@ export const normalizeProductColors = (colorsArray: any[]) => {
         if (code && /^#([0-9A-F]{3}|[0-9A-F]{6})$/i.test(code)) {
           return {
             colorName: name,
-            colorCode: code
+            colorCode: code,
+            imageUrl: imageUrl
           };
         }
       }
       return null;
     })
-    .filter((c): c is { colorName: string; colorCode: string } => {
+    .filter((c: any): c is { colorName: string; colorCode: string; imageUrl?: string } => {
       if (c === null) return false;
       const normalizedName = c.colorName.trim().toLowerCase();
       if (seenNames.has(normalizedName)) return false;
@@ -137,12 +139,18 @@ export const AdminProducts = () => {
     imagesInput: [] as string[],
     detailImagesInput: [] as string[],
     sizesInput: [] as string[],
-    colorsInput: [] as any[]
+    colorsInput: [] as any[],
+    flashBundleEnabled: false,
+    flashBundleStartDate: '',
+    flashBundleEndDate: '',
+    flashBundleTiers: [] as Array<{ quantity: number; bundlePrice: number }>
   });
 
   // Local state for adding individual elements to lists
   const [newImageUrl, setNewImageUrl] = useState('');
   const [newSize, setNewSize] = useState('');
+  const [newTierQty, setNewTierQty] = useState('');
+  const [newTierPrice, setNewTierPrice] = useState('');
 
   useEffect(() => {
     fetchProducts();
@@ -222,7 +230,13 @@ export const AdminProducts = () => {
       images: formData.imagesInput,
       detailImages: formData.detailImagesInput,
       sizes: formData.sizesInput,
-      colors: formData.colorsInput
+      colors: formData.colorsInput,
+      flashBundle: {
+        enabled: formData.flashBundleEnabled,
+        startDate: formData.flashBundleStartDate || '',
+        endDate: formData.flashBundleEndDate || '',
+        tiers: formData.flashBundleTiers || []
+      }
     };
 
     try {
@@ -307,11 +321,17 @@ export const AdminProducts = () => {
       imagesInput: product.images || [],
       detailImagesInput: product.detailImages || [],
       sizesInput: product.sizes || [],
-      colorsInput: normalizeProductColors(product.colors || [])
+      colorsInput: normalizeProductColors(product.colors || []),
+      flashBundleEnabled: product.flashBundle?.enabled || false,
+      flashBundleStartDate: product.flashBundle?.startDate || '',
+      flashBundleEndDate: product.flashBundle?.endDate || '',
+      flashBundleTiers: product.flashBundle?.tiers || []
     });
     setIsAdding(false);
     setNewImageUrl('');
     setNewSize('');
+    setNewTierQty('');
+    setNewTierPrice('');
   };
 
   const startAdd = () => {
@@ -333,10 +353,16 @@ export const AdminProducts = () => {
       imagesInput: [],
       detailImagesInput: [],
       sizesInput: ['XS', 'S', 'M', 'L', 'XL'], // Default sizes
-      colorsInput: [] // Start empty, check default ones from global pool
+      colorsInput: [], // Start empty, check default ones from global pool
+      flashBundleEnabled: false,
+      flashBundleStartDate: '',
+      flashBundleEndDate: '',
+      flashBundleTiers: []
     });
     setNewImageUrl('');
     setNewSize('');
+    setNewTierQty('');
+    setNewTierPrice('');
   };
 
   const cancelEditAdd = () => {
@@ -379,6 +405,34 @@ export const AdminProducts = () => {
       ...prev,
       sizesInput: prev.sizesInput.filter(s => s !== sizeToRemove)
     }));
+  };
+
+  const appendTier = () => {
+    const qty = parseInt(newTierQty);
+    const pPrice = parseFloat(newTierPrice);
+    if (!qty || qty <= 0) {
+      alert("الرجاء إدخال كمية صحيحة أكبر من 0 / Please enter valid quantity");
+      return;
+    }
+    if (!pPrice || pPrice <= 0) {
+      alert("الرجاء إدخال سعر صحيح أكبر من 0 / Please enter valid price");
+      return;
+    }
+    const exists = formData.flashBundleTiers.some(t => t.quantity === qty);
+    if (exists) {
+      alert("هذه الكمية مضافة بالفعل! / This quantity tier is already added!");
+      return;
+    }
+    const updated = [...formData.flashBundleTiers, { quantity: qty, bundlePrice: pPrice }]
+      .sort((a, b) => a.quantity - b.quantity);
+    setFormData(prev => ({ ...prev, flashBundleTiers: updated }));
+    setNewTierQty('');
+    setNewTierPrice('');
+  };
+
+  const removeTier = (indexToRemove: number) => {
+    const updated = formData.flashBundleTiers.filter((_, idx) => idx !== indexToRemove);
+    setFormData(prev => ({ ...prev, flashBundleTiers: updated }));
   };
 
   // Global pool / local selection colors routines
@@ -711,6 +765,74 @@ export const AdminProducts = () => {
               </div>
             </div>
 
+            {/* Color-Image Linking Section */}
+            {formData.colorsInput.length > 0 && (
+              <div className="bg-white p-4.5 rounded-2xl border border-neutral-200/60 mt-3 space-y-3 shadow-xs">
+                <div>
+                  <span className="text-[12.5px] font-bold text-neutral-800 flex items-center gap-1.5">
+                    🔗 ربط الألوان بالصور / Color-Image Linking
+                  </span>
+                  <p className="text-[11px] text-neutral-450 mt-1 leading-relaxed">
+                    حدد الصورة المعروضة المناسبة لكل خيار لون مفعل لهذا المنتج لتبديلها تلقائياً عند الضغط عليه.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {formData.colorsInput.map((colorItem, idx) => {
+                    // Combine main thumbnail and product images for selection
+                    const availableImages = [formData.image, ...formData.imagesInput].filter((url): url is string => !!url);
+                    
+                    return (
+                      <div key={idx} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2.5 bg-neutral-50/70 hover:bg-neutral-50 rounded-xl border border-neutral-200/50 transition-colors">
+                        {/* Color Name Info */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="w-4 h-4 rounded-full border border-neutral-350 shadow-xs" style={{ backgroundColor: colorItem.colorCode }} />
+                          <span className="text-[12px] font-semibold text-neutral-700">{colorItem.colorName}</span>
+                        </div>
+
+                        {/* Image Select */}
+                        <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                          <select
+                            value={colorItem.imageUrl || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const updatedColors = [...formData.colorsInput];
+                              updatedColors[idx] = { ...updatedColors[idx], imageUrl: val };
+                              setFormData(prev => ({ ...prev, colorsInput: updatedColors }));
+                            }}
+                            className="bg-white border border-neutral-200 rounded-lg px-2 py-1.5 text-[11px] outline-none text-neutral-700 focus:border-brand-text max-w-xs font-sans shadow-2xs"
+                          >
+                            <option value="">-- بدون صورة / Unlinked --</option>
+                            {availableImages.map((imgUrl, imageIdx) => (
+                              <option key={imageIdx} value={imgUrl}>
+                                {imageIdx === 0 ? 'صورة الغلاف / Thumbnail' : `الصورة الإضافية ${imageIdx}`}
+                              </option>
+                            ))}
+                          </select>
+
+                          {/* Preview Thumbnail */}
+                          {colorItem.imageUrl ? (
+                            <div className="w-8 h-8 rounded-md border border-neutral-200 bg-white overflow-hidden shrink-0 shadow-3xs">
+                              <img
+                                src={colorItem.imageUrl}
+                                alt="Color selector preview"
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-8 h-8 rounded-md border border-neutral-150 bg-neutral-100 flex items-center justify-center shrink-0">
+                              <span className="text-[8px] text-neutral-400 font-mono">N/A</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Editing Global Color Inline Card */}
             {editingColor && (
               <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 space-y-2.5">
@@ -778,6 +900,170 @@ export const AdminProducts = () => {
                       </button>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Flash Bundle Offer Section */}
+          <div className="bg-neutral-50 p-5 rounded-xl border border-neutral-200/50 space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-neutral-200/50">
+              <div>
+                <span className="text-[13px] font-bold text-neutral-800 flex items-center gap-1.5">
+                  ⚡ عرض الحزم السريعة / Flash Bundle Offer
+                </span>
+                <p className="text-[11px] text-neutral-400 mt-0.5">
+                  تفعيل الخصومات وعروض الكمية المؤقتة للمنتج
+                </p>
+              </div>
+              
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.flashBundleEnabled}
+                  onChange={(e) => setFormData(prev => ({ ...prev, flashBundleEnabled: e.target.checked }))}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-neutral-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                <span className="mr-2 text-[12px] font-medium text-neutral-500 mr-2">
+                  {formData.flashBundleEnabled ? 'مفعل / ON' : 'معطل / OFF'}
+                </span>
+              </label>
+            </div>
+
+            {formData.flashBundleEnabled && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                {/* Dates Configuration */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block text-[11px] text-neutral-500 font-semibold mb-1">تاريخ ووقت بدء العرض / Start Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      value={formData.flashBundleStartDate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, flashBundleStartDate: e.target.value }))}
+                      className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-[12px] outline-none focus:border-brand-text transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-neutral-500 font-semibold mb-1">تاريخ ووقت انتهاء العرض / End Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      value={formData.flashBundleEndDate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, flashBundleEndDate: e.target.value }))}
+                      className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-[12px] outline-none focus:border-brand-text transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* Tiers Configuration */}
+                <div className="border-t border-neutral-200/50 pt-3 space-y-3">
+                  <span className="text-[12px] font-bold text-neutral-700 block">🪜 مستويات عروض الكمية / Quantity Bundle Tiers</span>
+                  
+                  {/* Add Tier Inline Form */}
+                  <div className="bg-white p-3.5 rounded-xl border border-neutral-200/60 flex flex-col sm:flex-row items-end gap-3">
+                    <div className="flex-1 w-full">
+                      <label className="block text-[10px] text-neutral-400 mb-1">الكمية المطلوبة / Quantity</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={newTierQty}
+                        onChange={(e) => setNewTierQty(e.target.value)}
+                        placeholder="مثال: 2"
+                        className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-brand-text transition-colors"
+                      />
+                    </div>
+                    <div className="flex-1 w-full">
+                      <label className="block text-[10px] text-neutral-400 mb-1">سعر الحزمة بالكامل / Bundle Price (DA)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={newTierPrice}
+                        onChange={(e) => setNewTierPrice(e.target.value)}
+                        placeholder="مثال: 6500"
+                        className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-brand-text transition-colors"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={appendTier}
+                      className="bg-brand-text hover:bg-neutral-800 text-white text-[12px] font-semibold px-4 py-2.5 rounded-xl transition-colors shrink-0 w-full sm:w-auto"
+                    >
+                      إضافة مستوى / Add Tier
+                    </button>
+                  </div>
+
+                  {/* Tiers Preview */}
+                  {formData.flashBundleTiers.length > 0 ? (
+                    <div className="space-y-2">
+                      {(() => {
+                        const basePrice = parseFloat(formData.price) || 0;
+                        let bestIdx = -1;
+                        let maxSaving = 0;
+                        
+                        formData.flashBundleTiers.forEach((tier, i) => {
+                          const originalTotal = basePrice * tier.quantity;
+                          const savedAmount = originalTotal - tier.bundlePrice;
+                          if (savedAmount > maxSaving) {
+                            maxSaving = savedAmount;
+                            bestIdx = i;
+                          }
+                        });
+
+                        return formData.flashBundleTiers.map((tier, idx) => {
+                          const originalTotal = basePrice * tier.quantity;
+                          const savedAmount = originalTotal - tier.bundlePrice;
+                          const savedPercent = originalTotal > 0 ? Math.round((savedAmount / originalTotal) * 100) : 0;
+                          const isBest = idx === bestIdx;
+
+                          return (
+                            <div key={idx} className="flex items-center justify-between bg-white rounded-xl border border-neutral-200/60 p-3 hover:bg-neutral-50/50 transition-colors">
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                                <span className="text-[12.5px] font-bold text-neutral-800 font-sans">
+                                  📦 شراء {tier.quantity} ({tier.quantity} x {basePrice} DA)
+                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[12px] font-bold text-green-600 font-sans">
+                                    سعر الحزمة: {tier.bundlePrice} DA
+                                  </span>
+                                  {savedAmount > 0 ? (
+                                    <>
+                                      <span className="text-[10px] text-neutral-400 line-through">
+                                        {originalTotal} DA
+                                      </span>
+                                      <span className="text-[10.5px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                                        وفرت {savedAmount} DA ({savedPercent}%)
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-[10.5px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-semibold font-sans">
+                                      لا توجود توفّير
+                                    </span>
+                                  )}
+                                  {isBest && savedAmount > 0 && (
+                                    <span className="text-[10.5px] bg-amber-50 text-amber-700 border border-amber-200/50 px-2 py-0.5 rounded-full font-bold">
+                                      🏆 أفضل قيمة / Best Value
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeTier(idx)}
+                                className="p-1.5 hover:bg-red-50 hover:border-red-200 border border-transparent rounded-lg text-neutral-400 hover:text-red-600 transition-all font-sans text-[11px]"
+                                title="حذف العرض"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="text-center p-5 bg-white rounded-xl border border-dashed border-neutral-200 text-neutral-400">
+                      <span className="text-[11.5px]">لا توجد مستويات عروض كمية مضافة حالياً. يرجى ملء الحقول أعلاه لإضافة أول عرض.</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

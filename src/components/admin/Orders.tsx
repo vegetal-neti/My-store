@@ -728,14 +728,29 @@ export const AdminOrders = () => {
                           {item.name || item.title || 'منتج غير معروف الاسم'}
                         </div>
                         {/* Variant details if sizing is set */}
-                        <div className="flex flex-wrap gap-2 mt-1.5 text-[10px] text-neutral-400 font-medium">
-                          {item.size && (
-                            <span className="px-2 py-0.5 rounded bg-neutral-100 text-neutral-600">المقاس: {item.size}</span>
+                        <div className="flex flex-col gap-1 mt-1.5 text-[10px] text-neutral-400 font-medium">
+                          {item.bundleItems && item.bundleItems.length > 0 ? (
+                            <div className="space-y-1.5 mt-1 pr-1.5 border-r-2 border-[#78350f]/30">
+                              {item.bundleItems.map((bi: any, bIdx: number) => (
+                                <div key={bIdx} className="flex gap-1.5 items-center">
+                                  <span className="bg-amber-100 text-[#78350f] font-bold px-1.5 py-0.2 rounded text-[8px]">القطعة {bIdx + 1}</span>
+                                  <span className="text-neutral-750 font-sans font-extrabold text-[11px]">
+                                    {bi.color || ''}{bi.color && bi.size ? ' / ' : ''}{bi.size || ''}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {item.size && (
+                                <span className="px-2 py-0.5 rounded bg-neutral-100 text-neutral-600">المقاس: {item.size}</span>
+                              )}
+                              {item.color && (
+                                <span className="px-2 py-0.5 rounded bg-neutral-100 text-neutral-600">اللون: {item.color}</span>
+                              )}
+                            </div>
                           )}
-                          {item.color && (
-                            <span className="px-2 py-0.5 rounded bg-neutral-100 text-neutral-600">اللون: {item.color}</span>
-                          )}
-                          <span className="font-bold text-rose-500 font-sans">
+                          <span className="font-bold text-rose-500 font-sans mt-1">
                             {Number(item.price || 0).toLocaleString()} دج × {item.quantity || 1}
                           </span>
                         </div>

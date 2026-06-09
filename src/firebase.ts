@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { 
+  getFirestore,
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
@@ -28,25 +29,40 @@ import {
   deleteObject 
 } from 'firebase/storage';
 
-const metaEnv = (import.meta as any).env || {};
-
 const firebaseConfig = {
-  apiKey: metaEnv.VITE_FIREBASE_API_KEY,
-  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: metaEnv.VITE_FIREBASE_APP_ID
+  apiKey: (import.meta as any).env?.VITE_FIREBASE_API_KEY || '',
+  authDomain: (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: (import.meta as any).env?.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: (import.meta as any).env?.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: (import.meta as any).env?.VITE_FIREBASE_APP_ID || ''
 };
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  }),
-  experimentalForceLongPolling: true,
-});
+
+let dbInstance;
+try {
+  dbInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
+    experimentalForceLongPolling: true,
+  });
+} catch (e) {
+  console.warn("Firestore persistent local cache initialization failed, falling back to long-polling without persistent multiple tab manager.", e);
+  try {
+    dbInstance = initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    });
+  } catch (err) {
+    console.error("Firestore initialization failed completely.", err);
+    // Fallback to basic getFirestore
+    dbInstance = getFirestore(app);
+  }
+}
+
+export const db = dbInstance;
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
@@ -334,6 +350,17 @@ export const sendTelegramNotificationIfNeeded = async (orderId: string, orderDat
       const name = item.name || item.title || 'منتج غير معروف';
       const qty = item.quantity || 1;
       const price = item.price || 0;
+      
+      if (item.bundleItems && item.bundleItems.length > 0) {
+        const bundleLines = item.bundleItems.map((bi: any, bIdx: number) => {
+          let opts = [];
+          if (bi.color) opts.push(bi.color);
+          if (bi.size) opts.push(bi.size);
+          return `      ${bIdx + 1}. ${opts.length > 0 ? opts.join(' / ') : '...'}`;
+        }).join('\n');
+        return `  ${idx + 1}. <b>${name}</b>\n      <b>Bundle: ${qty} Pieces</b>\n${bundleLines}\n      السعر: ${price} دج`;
+      }
+      
       const size = item.size || item.selectedSize;
       const color = item.color || item.selectedColor;
       

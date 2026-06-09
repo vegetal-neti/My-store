@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Package } from 'lucide-react';
 import { getProductById, createOrder, getShippingRates } from '../firebase';
 import { Product } from '../types';
 import { algeriaWilayas } from '../data/algeriaCities';
@@ -77,14 +77,15 @@ const getCleanedColors = (colors: any[] | undefined | null) => {
         if (code && /^#([0-9A-F]{3}|[0-9A-F]{6})$/i.test(code)) {
           return {
             colorName: name,
-            colorCode: code
+            colorCode: code,
+            imageUrl: col.imageUrl || ''
           };
         }
       }
       
       return null;
     })
-    .filter((c): c is { colorName: string; colorCode: string } => {
+    .filter((c: any): c is { colorName: string; colorCode: string; imageUrl?: string } => {
       if (c === null) return false;
       const normalizedName = c.colorName.trim().toLowerCase();
       if (seenNames.has(normalizedName)) return false;
@@ -105,9 +106,58 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Flash Bundle Offers states running on interval
+  const [now, setNow] = useState(new Date());
+  const [selectedBundleIdx, setSelectedBundleIdx] = useState<number>(-1);
+
   // Selection states
   const [selectedSize, setSelectedSize] = useState<string>('');
   const [selectedColor, setSelectedColor] = useState<string>('');
+  
+  // Selections for individual bundle pieces
+  const [bundleSelections, setBundleSelections] = useState<{ color?: string; size?: string }[]>([]);
+
+  // Derived state for bundle quantity
+  const resolvedQuantityDerived = (
+    product &&
+    product.flashBundle?.enabled &&
+    product.flashBundle.tiers &&
+    product.flashBundle.tiers.length > 0 &&
+    selectedBundleIdx >= 0 &&
+    product.flashBundle.tiers[selectedBundleIdx]
+  ) ? product.flashBundle.tiers[selectedBundleIdx].quantity : 1;
+
+  // Sync bundle selections list to resolvedQuantity
+  useEffect(() => {
+    if (!product) return;
+    const sizesList = product.sizes || [];
+    const colorsList = getCleanedColors(product.colors);
+    setBundleSelections(prev => {
+      const next = [...prev];
+      if (next.length > resolvedQuantityDerived) {
+        return next.slice(0, resolvedQuantityDerived);
+      }
+      while (next.length < resolvedQuantityDerived) {
+        next.push({
+          color: (colorsList.length === 1) ? colorsList[0].colorName : '',
+          size: (sizesList.length === 1) ? sizesList[0] : ''
+        });
+      }
+      return next;
+    });
+  }, [resolvedQuantityDerived, product]);
+
+  const updatePieceSelection = (index: number, type: 'color' | 'size', value: string) => {
+    setBundleSelections(prev => {
+      const next = [...prev];
+      if (!next[index]) {
+        next[index] = {};
+      }
+      next[index] = { ...next[index], [type]: value };
+      return next;
+    });
+    setShowErrorMsg(false);
+  };
   
   // Form fields
   const [fullName, setFullName] = useState('');
@@ -119,6 +169,13 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
   
   // Gallery active image
   const [activeImage, setActiveImage] = useState<string>('');
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
   
   // Form validation/submit states
   const [showErrorMsg, setShowErrorMsg] = useState(false);
@@ -185,6 +242,45 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
     fetchProductAndRates();
   }, [productId]);
 
+  // Synchronize dynamic default selection when active (Run before early returns to preserve Hook ordering rules)
+  useEffect(() => {
+    if (product) {
+      const startDateStr = product.flashBundle?.startDate;
+      const endDateStr = product.flashBundle?.endDate;
+      const startDate = startDateStr ? new Date(startDateStr) : null;
+      const endDate = endDateStr ? new Date(endDateStr) : null;
+      const checkTime = new Date();
+
+      const isFlashBundleActive = !!(
+        product.flashBundle?.enabled &&
+        product.flashBundle.tiers &&
+        product.flashBundle.tiers.length > 0 &&
+        (!startDate || checkTime >= startDate) &&
+        (!endDate || checkTime < endDate)
+      );
+
+      if (isFlashBundleActive) {
+        const basePrice = product.price || 0;
+        let maxSaving = 0;
+        let bestIdx = 0;
+        const tiers = product.flashBundle?.tiers || [];
+        tiers.forEach((tier, idx) => {
+          const originalTotal = basePrice * tier.quantity;
+          const savedAmount = originalTotal - tier.bundlePrice;
+          if (savedAmount > maxSaving) {
+            maxSaving = savedAmount;
+            bestIdx = idx;
+          }
+        });
+        setSelectedBundleIdx(bestIdx);
+      } else {
+        setSelectedBundleIdx(-1);
+      }
+    } else {
+      setSelectedBundleIdx(-1);
+    }
+  }, [product?.id]);
+
   if (loading) {
     return (
       <div className="flex-1 flex flex-col justify-center items-center min-h-screen bg-brand-bg py-20">
@@ -210,6 +306,11 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
   const hasSizes = product.sizes && product.sizes.length > 0;
   const cleanedColors = getCleanedColors(product.colors);
   const hasColors = cleanedColors.length > 0;
+
+  const resolvedQuantity = resolvedQuantityDerived;
+
+  const needsSizeSelection = hasSizes && (resolvedQuantity === 1 ? !selectedSize : bundleSelections.some(item => !item.size));
+  const needsColorSelection = hasColors && (resolvedQuantity === 1 ? !selectedColor : bundleSelections.some(item => !item.color));
   
   // Under stock warning
   const isOutOfStock = product.stock !== undefined && product.stock <= 0;
@@ -229,10 +330,43 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
     ? (resolvedRateObj && resolvedRateObj.deskPrice !== undefined ? Number(resolvedRateObj.deskPrice) : selectedWilayaObj.shippingPickup) 
     : 0;
 
+  // Flash Bundle Offers calculations
+  const startDateStr = product.flashBundle?.startDate;
+  const endDateStr = product.flashBundle?.endDate;
+  const startDate = startDateStr ? new Date(startDateStr) : null;
+  const endDate = endDateStr ? new Date(endDateStr) : null;
+
+  const isFlashBundleActive = !!(
+    product.flashBundle?.enabled &&
+    product.flashBundle.tiers &&
+    product.flashBundle.tiers.length > 0 &&
+    (!startDate || now >= startDate) &&
+    (!endDate || now < endDate)
+  );
+
+  const activeTiers = isFlashBundleActive ? (product.flashBundle?.tiers || []) : [];
+
+  const resolvedProductPrice = (isFlashBundleActive && selectedBundleIdx >= 0 && activeTiers[selectedBundleIdx])
+    ? activeTiers[selectedBundleIdx].bundlePrice
+    : (product.price || 0);
+
+  const getCountdownString = () => {
+    if (!endDate) return "00:00:00";
+    const diff = endDate.getTime() - now.getTime();
+    if (diff <= 0) return "00:00:00";
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    
+    const pad = (num: number) => String(num).padStart(2, '0');
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  };
+
   const deliveryFee = state 
     ? (deliveryType === 'home' ? resolvedHomePrice : resolvedDeskPrice)
     : 0.00; // 0 if no state is selected yet to make it clean
-  const productPrice = product.price || 0;
+  const productPrice = resolvedProductPrice;
   const totalPrice = productPrice + deliveryFee;
 
   // Real-time Order Form Validation Handlers
@@ -368,10 +502,10 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
     }
 
     // Validation
-    const needsSizeSelection = hasSizes && !selectedSize;
-    const needsColorSelection = hasColors && !selectedColor;
+    const isSizeMissing = hasSizes && (resolvedQuantity === 1 ? !selectedSize : bundleSelections.some(item => !item.size));
+    const isColorMissing = hasColors && (resolvedQuantity === 1 ? !selectedColor : bundleSelections.some(item => !item.color));
 
-    if (needsSizeSelection || needsColorSelection) {
+    if (isSizeMissing || isColorMissing) {
       setShowErrorMsg(true);
       // Scroll to options
       const optEl = document.getElementById('options-selector');
@@ -437,6 +571,27 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
     setIsSubmitting(true);
 
     try {
+      const bundleEnabled = isFlashBundleActive && selectedBundleIdx >= 0;
+      const currentBundleTier = bundleEnabled ? activeTiers[selectedBundleIdx] : null;
+      const bundleQuantity = currentBundleTier ? currentBundleTier.quantity : 0;
+      const bundlePrice = currentBundleTier ? currentBundleTier.bundlePrice : 0;
+      const originalPrice = currentBundleTier ? (product.price || 0) * currentBundleTier.quantity : 0;
+      const savedAmount = currentBundleTier ? (originalPrice - bundlePrice) : 0;
+      const savedPercentage = (currentBundleTier && originalPrice > 0) ? Math.round((savedAmount / originalPrice) * 100) : 0;
+      const flashOfferId = bundleEnabled ? `${product.id}_flash_bundle` : '';
+
+      const finalBundleItems = resolvedQuantity === 1
+        ? [
+            {
+              color: selectedColor || null,
+              size: selectedSize || null
+            }
+          ]
+        : bundleSelections.map(item => ({
+            color: item.color || null,
+            size: item.size || null
+          }));
+
       const orderData = {
         customerInfo: {
           fullName: trimmedName,
@@ -449,17 +604,26 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
             id: product.id,
             title: product.name || product.title,
             price: productPrice,
-            quantity: 1,
-            selectedSize: selectedSize || null,
-            selectedColor: selectedColor || null,
-            image: product.image || null
+            quantity: resolvedQuantity,
+            selectedSize: resolvedQuantity === 1 ? (selectedSize || null) : null,
+            selectedColor: resolvedQuantity === 1 ? (selectedColor || null) : null,
+            image: product.image || null,
+            bundleItems: finalBundleItems
           }
         ],
         deliveryType: deliveryType === 'home' ? 'Home Delivery' : 'Office Pickup',
         deliveryFee,
         totalPrice,
         paymentMethod: 'COD',
-        status: 'pending'
+        status: 'pending',
+        bundleEnabled,
+        bundleQuantity: resolvedQuantity,
+        bundlePrice: productPrice,
+        bundleItems: finalBundleItems, // root level selections list
+        originalPrice,
+        savedAmount,
+        savedPercentage,
+        flashOfferId
       };
 
       await createOrder(orderData);
@@ -587,72 +751,315 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
             </p>
           </div>
 
-          <form onSubmit={handleConfirmOrder} className="space-y-6 mt-6 border-t border-neutral-100 pt-6" id="options-selector">
-            
-            {/* Color Option Select */}
-            {hasColors && (
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-[12px] uppercase tracking-wider font-semibold text-neutral-400">Color / اللون</span>
-                  {selectedColor && <span className="text-[12px] font-medium text-brand-text">{selectedColor}</span>}
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  {cleanedColors.map((col, index) => {
-                    const name = col.colorName;
-                    const code = col.colorCode;
-                    const isSelected = selectedColor === name;
-                    return (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => { setSelectedColor(name); setShowErrorMsg(false); }}
-                        className={`w-9 h-9 rounded-full transition-all focus:outline-none relative flex justify-center items-center ${
-                          isSelected
-                            ? 'ring-2 ring-black ring-offset-2 scale-95 shadow-sm'
-                            : 'hover:scale-105 border border-neutral-300/60'
-                        }`}
-                        style={{ backgroundColor: code }}
-                        title={name}
-                      />
-                    );
-                  })}
+          {/* Flash Bundle Offers Widget */}
+          {isFlashBundleActive && activeTiers.length > 0 && (
+            <div className="bg-amber-50/45 rounded-2xl border border-amber-500/20 p-4 mt-2 mb-6 space-y-3.5 animate-in fade-in duration-200">
+
+              {/* Header with real-time countdown */}
+              <div className="flex justify-between items-center bg-white/95 rounded-xl px-4 py-3 border border-amber-500/10 shadow-sm" dir="rtl">
+                <span className="text-[13.5px] font-bold text-[#78350f] flex items-center gap-1.5 font-sans">
+                  ⚡ عرض الكمية ينتهي خلال
+                </span>
+                
+                <div className="flex items-center gap-2" dir="rtl">
+                  <span className="bg-[#b91c1c] text-white text-[15px] font-mono font-extrabold px-3 py-1.5 rounded-lg tracking-wider shadow-[0_0_12px_rgba(185,28,28,0.6)] animate-countdown-glow select-none">
+                    {getCountdownString()}
+                  </span>
                 </div>
               </div>
-            )}
 
-            {/* Size Option Select */}
-            {hasSizes && (
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-[12px] uppercase tracking-wider font-semibold text-neutral-400">Size / المقاس</span>
-                  {selectedSize && <span className="text-[12px] font-medium text-brand-text">{selectedSize}</span>}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {product.sizes?.map((sz) => {
-                    const isSelected = selectedSize === sz;
+              {/* Tiers list display */}
+              <div className="space-y-2.5">
+                {(() => {
+                  const basePrice = product.price || 0;
+                  let bestIdx = -1;
+                  let maxSaving = 0;
+                  
+                  activeTiers.forEach((tier, i) => {
+                    const originalTotal = basePrice * tier.quantity;
+                    const savedAmount = originalTotal - tier.bundlePrice;
+                    if (savedAmount > maxSaving) {
+                      maxSaving = savedAmount;
+                      bestIdx = i;
+                    }
+                  });
+
+                  // Natural Arabic quantity plural count helper function
+                  const getArabicQuantityText = (qty: number) => {
+                    if (qty === 1) return "شراء حبة واحدة";
+                    if (qty === 2) return "شراء حبتين";
+                    if (qty >= 3 && qty <= 10) return `شراء ${qty} حبات`;
+                    return `شراء ${qty} حبة`;
+                  };
+
+                  return activeTiers.map((tier, idx) => {
+                    const originalTotal = basePrice * tier.quantity;
+                    const savedAmount = originalTotal - tier.bundlePrice;
+                    const savedPercent = originalTotal > 0 ? Math.round((savedAmount / originalTotal) * 100) : 0;
+                    const isSelected = selectedBundleIdx === idx;
+
                     return (
                       <button
-                        key={sz}
+                        key={idx}
                         type="button"
-                        onClick={() => { setSelectedSize(sz); setShowErrorMsg(false); }}
-                        className={`min-w-[3.5rem] h-10 px-5 rounded-[10px] text-[13px] font-semibold transition-all border flex items-center justify-center ${
+                        onClick={() => setSelectedBundleIdx(idx)}
+                        className={`w-full transition-colors duration-200 flex flex-row items-center justify-between gap-3 p-4 rounded-xl border-2 cursor-pointer relative ${
                           isSelected
-                            ? 'bg-black text-white border-black shadow-sm'
-                            : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:border-neutral-400'
+                            ? 'border-[#78350f] bg-[#78350f]/5 shadow-xs'
+                            : 'border-neutral-200 bg-white hover:bg-neutral-50/50 hover:border-neutral-300 shadow-sm'
                         }`}
+                        dir="rtl"
                       >
-                        {sz}
+                        {idx === 1 && (
+                          <span className="absolute -top-2.5 right-4 z-10 bg-[#E6C7C2] text-neutral-900 text-[10.5px] font-bold px-2.5 py-0.5 rounded shadow-sm font-sans select-none">
+                            الموصى به
+                          </span>
+                        )}
+                        {idx === 2 && (
+                          <span className="absolute -top-2.5 right-4 z-10 bg-[#b91c1c] text-white text-[10.5px] font-bold px-2.5 py-0.5 rounded shadow-sm font-sans select-none">
+                            أفضل عرض
+                          </span>
+                        )}
+
+                        {/* Right side: Selection Check & Description */}
+                        <div className="flex items-center gap-3 text-right">
+                          <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors duration-200 ${
+                            isSelected ? 'bg-[#78350f] border-[#78350f]' : 'border-neutral-300 bg-white'
+                          }`}>
+                            {isSelected && (
+                              <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                            )}
+                          </div>
+                          
+                          <div className="flex flex-col items-start text-right">
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                {Array.from({ length: tier.quantity }).map((_, iconIdx) => (
+                                  <Package key={iconIdx} className="w-4 h-4 text-[#78350f]/65 shrink-0" />
+                                ))}
+                              </div>
+                              <span className="text-[14px] font-bold text-neutral-900 font-sans">
+                                {getArabicQuantityText(tier.quantity)}
+                              </span>
+                            </div>
+                            {savedAmount > 0 ? (
+                              <span className="text-[13px] text-emerald-700 font-extrabold mt-1 font-sans">
+                                وفر {savedAmount.toFixed(0)} دج
+                              </span>
+                            ) : (
+                              <span className="text-[13px] text-transparent select-none mt-1 font-sans h-[19.5px] block">
+                                &nbsp;
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Left side: Prices stacked vertically directly aligned on the left */}
+                        <div className="flex flex-col items-end justify-center select-none shrink-0 gap-1 pl-1">
+                          <span className="text-[16px] font-bold text-neutral-900 font-sans leading-none">
+                            {tier.bundlePrice.toFixed(0)} دج
+                          </span>
+                          {savedAmount > 0 ? (
+                            <span className="text-[11.5px] text-neutral-400 line-through font-sans leading-none">
+                              {originalTotal.toFixed(0)} دج
+                            </span>
+                          ) : (
+                            <span className="text-[11.5px] text-transparent line-through font-sans leading-none select-none h-[11.5px] block">
+                              &nbsp;
+                            </span>
+                          )}
+                        </div>
                       </button>
                     );
-                  })}
-                </div>
+                  });
+                })()}
               </div>
+            </div>
+          )}
+
+          <form onSubmit={handleConfirmOrder} className="space-y-6 mt-6 border-t border-neutral-100 pt-6" id="options-selector">
+            
+            {resolvedQuantity > 1 ? (
+              /* Multi-Piece Bundle Option Selector */
+              (hasColors || hasSizes) && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 mb-1" dir="rtl">
+                    <span className="text-[12px] uppercase tracking-wider font-semibold text-neutral-400">
+                      تخصيص خيارات كل قطعة / Customize each piece
+                    </span>
+                  </div>
+                  <div className="space-y-4">
+                    {Array.from({ length: resolvedQuantity }).map((_, i) => {
+                      const pieceColor = bundleSelections[i]?.color || '';
+                      const pieceSize = bundleSelections[i]?.size || '';
+                      return (
+                        <div key={i} className="bg-neutral-50/50 p-4.5 rounded-2xl border border-neutral-200/60 space-y-4 text-right animate-in fade-in duration-200" dir="rtl">
+                          <div className="flex justify-between items-center border-b border-neutral-200/30 pb-2 mb-1">
+                            <span className="text-[13.5px] font-bold text-[#78350f] flex items-center gap-1.5 font-sans">
+                              📦 القطعة {i + 1}
+                            </span>
+                            <span className="text-[10px] text-neutral-400 font-mono">Piece {i + 1}</span>
+                          </div>
+
+                          {/* Color Selection for Piece i */}
+                          {hasColors && (
+                            <div>
+                              <div className="flex justify-between mb-2 text-xs">
+                                <span className="font-semibold text-neutral-500">اللون / Color:</span>
+                                {pieceColor ? (
+                                  <span className="font-bold text-brand-text">{pieceColor}</span>
+                                ) : (
+                                  <span className="text-red-500 font-semibold text-[11px]">الرجاء اختيار لون</span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-2.5">
+                                {cleanedColors.map((col, index) => {
+                                  const name = col.colorName;
+                                  const code = col.colorCode;
+                                  const isSelected = pieceColor === name;
+                                  return (
+                                    <button
+                                      key={index}
+                                      type="button"
+                                      onClick={() => {
+                                        updatePieceSelection(i, 'color', name);
+                                        if (i === 0 && col.imageUrl) {
+                                          setActiveImage(col.imageUrl);
+                                        }
+                                      }}
+                                      className={`w-8.5 h-8.5 rounded-full transition-all focus:outline-none relative flex justify-center items-center ${
+                                        isSelected
+                                          ? 'ring-2 ring-[#78350f] ring-offset-2 scale-95 shadow-sm'
+                                          : 'hover:scale-105 border border-neutral-300/70 bg-white'
+                                      }`}
+                                      style={{ backgroundColor: code }}
+                                      title={name}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Size Selection for Piece i */}
+                          {hasSizes && (
+                            <div>
+                              <div className="flex justify-between mb-2 text-xs">
+                                <span className="font-semibold text-neutral-500">المقاس / Size:</span>
+                                {pieceSize ? (
+                                  <span className="font-bold text-brand-text">{pieceSize}</span>
+                                ) : (
+                                  <span className="text-red-500 font-semibold text-[11px]">الرجاء اختيار مقاس</span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {product.sizes?.map((sz) => {
+                                  const isSelected = pieceSize === sz;
+                                  return (
+                                    <button
+                                      key={sz}
+                                      type="button"
+                                      onClick={() => {
+                                        updatePieceSelection(i, 'size', sz);
+                                      }}
+                                      className={`min-w-[3rem] h-9 px-4 rounded-lg text-[12px] font-bold transition-all border flex items-center justify-center ${
+                                        isSelected
+                                          ? 'bg-[#78350f] text-white border-[#78350f] shadow-sm'
+                                          : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-400'
+                                      }`}
+                                    >
+                                      {sz}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )
+            ) : (
+              /* Single-Piece Original Option Selectors */
+              <>
+                {/* Color Option Select */}
+                {hasColors && (
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-[12px] uppercase tracking-wider font-semibold text-neutral-400">Color / اللون</span>
+                      {selectedColor && <span className="text-[12px] font-medium text-brand-text">{selectedColor}</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {cleanedColors.map((col, index) => {
+                        const name = col.colorName;
+                        const code = col.colorCode;
+                        const isSelected = selectedColor === name;
+                        return (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => { 
+                              setSelectedColor(name); 
+                              setShowErrorMsg(false); 
+                              if (col.imageUrl) {
+                                setActiveImage(col.imageUrl);
+                              }
+                            }}
+                            className={`w-9 h-9 rounded-full transition-all focus:outline-none relative flex justify-center items-center ${
+                              isSelected
+                                ? 'ring-2 ring-black ring-offset-2 scale-95 shadow-sm'
+                                : 'hover:scale-105 border border-neutral-300/60'
+                            }`}
+                            style={{ backgroundColor: code }}
+                            title={name}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Size Option Select */}
+                {hasSizes && (
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-[12px] uppercase tracking-wider font-semibold text-neutral-400">Size / المقاس</span>
+                      {selectedSize && <span className="text-[12px] font-medium text-brand-text">{selectedSize}</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {product.sizes?.map((sz) => {
+                        const isSelected = selectedSize === sz;
+                        return (
+                          <button
+                            key={sz}
+                            type="button"
+                            onClick={() => { setSelectedSize(sz); setShowErrorMsg(false); }}
+                            className={`min-w-[3.5rem] h-10 px-5 rounded-[10px] text-[13px] font-semibold transition-all border flex items-center justify-center ${
+                              isSelected
+                                ? 'bg-black text-white border-black shadow-sm'
+                                : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:border-neutral-400'
+                            }`}
+                          >
+                            {sz}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {/* ERROR COMPONENT */}
             {showErrorMsg && (
-              <div className="p-3 bg-red-50 border border-red-100 text-red-500 text-[13px] rounded-xl font-medium">
-                Please select both {hasSizes && !selectedSize && 'Size'} {hasSizes && !selectedSize && hasColors && !selectedColor && 'and'} {hasColors && !selectedColor && 'Color'} to proceed.
+              <div className="p-3.5 bg-red-50 border border-red-100 text-red-500 text-[13px] rounded-xl font-medium text-right" dir="rtl">
+                {resolvedQuantity === 1 ? (
+                  `يرجى تحديد ${hasColors && !selectedColor ? 'اللون' : ''}${hasColors && !selectedColor && hasSizes && !selectedSize ? ' و ' : ''}${hasSizes && !selectedSize ? 'المقاس' : ''} للقطعة للمتابعة.`
+                ) : (
+                  `يرجى اختيار ${hasColors && needsColorSelection ? 'الألوان' : ''}${hasColors && needsColorSelection && hasSizes && needsSizeSelection ? ' و ' : ''}${hasSizes && needsSizeSelection ? 'المقاسات' : ''} المطلوبة لجميع القطع داخل العرض لتأكيد الطلب.`
+                )}
               </div>
             )}
 
@@ -827,6 +1234,29 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
               </div>
 
               {/* Dynamic Order Summary inside details page */}
+              {isFlashBundleActive && resolvedQuantity > 1 && (
+                <div className="bg-white/85 border border-dashed border-amber-900/10 rounded-2xl p-4 mb-4 text-right animate-in fade-in duration-150" dir="rtl">
+                  <div className="text-[14px] font-extrabold text-[#78350f] mb-2 border-b border-amber-900/5 pb-1">
+                    {resolvedQuantity} قطع
+                  </div>
+                  <div className="space-y-1">
+                    {bundleSelections.map((item, index) => {
+                      let desc = [];
+                      if (item.color) desc.push(item.color);
+                      if (item.size) desc.push(item.size);
+                      return (
+                        <div key={index} className="flex gap-2 text-neutral-800 font-sans text-[13px] font-bold">
+                          <span>{index + 1}-</span>
+                          <span>
+                            {desc.length > 0 ? desc.join(' / ') : '...'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="border-t border-neutral-200/50 pt-3 mt-3 space-y-2">
                 
                 <div className="flex justify-between text-[13px] text-neutral-600" dir="rtl">
