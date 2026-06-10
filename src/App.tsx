@@ -8,6 +8,10 @@ import { ProductDetails } from './components/ProductDetails';
 import { SearchModal } from './components/SearchModal';
 import { ThankYou } from './components/ThankYou';
 import { AllProducts } from './components/AllProducts';
+import { ShippingRatesModal } from './components/ShippingRatesModal';
+import { FaqModal } from './components/FaqModal';
+import { getRouteUrl, navigateDeviceAware } from './lib/dynamicRouting';
+import { getSocialSettings } from './firebase';
 
 const Header = ({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSearchClick: () => void }) => {
   return (
@@ -337,7 +341,73 @@ const BestSellers = ({
   );
 };
 
-const Footer = () => {
+const Footer = ({ 
+  onNavigate, 
+  onShippingRatesOpen,
+  onFaqOpen
+}: { 
+  onNavigate: (view: 'home' | 'checkout' | 'success' | 'admin' | 'details' | 'thank-you' | 'products') => void;
+  onShippingRatesOpen: () => void;
+  onFaqOpen: () => void;
+}) => {
+  const [socials, setSocials] = React.useState<{
+    whatsapp?: string;
+    instagram?: string;
+    facebook?: string;
+    telegram?: string;
+  } | null>(null);
+
+  React.useEffect(() => {
+    let active = true;
+    const loadSocialSettings = async () => {
+      try {
+        const data = await getSocialSettings();
+        if (active && data) {
+          setSocials(data);
+        }
+      } catch (err) {
+        console.error("Error loading social settings in footer:", err);
+      }
+    };
+    loadSocialSettings();
+    return () => { active = false; };
+  }, []);
+
+  const formatSocialUrl = (type: string, value: string) => {
+    if (!value) return '';
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    
+    if (type === 'whatsapp') {
+      const cleanDigits = trimmed.replace(/\D/g, '');
+      return cleanDigits ? `https://wa.me/${cleanDigits}` : '';
+    }
+    
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    
+    // Support fallback handles
+    if (type === 'instagram') {
+      return `https://instagram.com/${trimmed.replace(/^@/, '')}`;
+    }
+    if (type === 'facebook') {
+      return `https://facebook.com/${trimmed}`;
+    }
+    if (type === 'telegram') {
+      return `https://t.me/${trimmed.replace(/^@/, '')}`;
+    }
+    
+    return trimmed;
+  };
+
+  const activeSocials = socials ? [
+    { type: 'instagram', icon: Instagram, url: formatSocialUrl('instagram', socials.instagram || ''), hoverBg: 'hover:bg-[#E1306C] hover:border-[#E1306C]' },
+    { type: 'whatsapp', isWhatsapp: true, url: formatSocialUrl('whatsapp', socials.whatsapp || ''), hoverBg: 'hover:bg-[#25D366] hover:border-[#25D366]' },
+    { type: 'facebook', icon: Facebook, url: formatSocialUrl('facebook', socials.facebook || ''), hoverBg: 'hover:bg-[#1877F2] hover:border-[#1877F2]' },
+    { type: 'telegram', isTelegram: true, url: formatSocialUrl('telegram', socials.telegram || ''), hoverBg: 'hover:bg-[#0088cc] hover:border-[#0088cc]' }
+  ].filter(item => item.url) : [];
+
   return (
     <footer className="bg-brand-footer text-white px-6 pt-8 pb-5 rounded-t-3xl sm:rounded-none mt-auto">
       <div className="max-w-md mx-auto">
@@ -350,21 +420,53 @@ const Footer = () => {
           <div>
             <h3 className="text-[13px] tracking-[0.15em] font-semibold text-white mb-2">خدمة العملاء</h3>
             <ul className="flex flex-col gap-1.5">
-              {['اسعار التوصيل', 'تتبع الطلب', 'سياسة الاسترجاع'].map((link) => (
-                <li key={link}>
-                  <a href="#" className="text-[15px] text-neutral-400 hover:text-white transition-colors">{link}</a>
-                </li>
-              ))}
+              <li>
+                <button 
+                  onClick={(e) => { e.preventDefault(); onShippingRatesOpen(); }}
+                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full"
+                >
+                  اسعار التوصيل
+                </button>
+              </li>
+              <li>
+                <a href="#" className="text-[15px] text-neutral-400 hover:text-white transition-colors">تتبع الطلب</a>
+              </li>
+              <li>
+                <button 
+                  onClick={(e) => { e.preventDefault(); onFaqOpen(); }}
+                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full"
+                >
+                  الأسئلة الشائعة (FAQ)
+                </button>
+              </li>
             </ul>
           </div>
           <div>
             <h3 className="text-[13px] tracking-[0.15em] font-semibold text-white mb-2">روابط سريعة</h3>
             <ul className="flex flex-col gap-1.5">
-              {['الرئيسية', 'منتجاتنا', 'تواصل معنا'].map((link) => (
-                <li key={link}>
-                  <a href="#" className="text-[15px] text-neutral-400 hover:text-white transition-colors">{link}</a>
-                </li>
-              ))}
+              <li>
+                <button 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    onNavigate('home'); 
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full"
+                >
+                  الرئيسية
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={(e) => { e.preventDefault(); onNavigate('products'); }}
+                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full"
+                >
+                  منتجاتنا
+                </button>
+              </li>
+              <li>
+                <a href="#" className="text-[15px] text-neutral-400 hover:text-white transition-colors">تواصل معنا</a>
+              </li>
             </ul>
           </div>
         </div>
@@ -374,15 +476,12 @@ const Footer = () => {
             © 2026 Shoplix - جميع الحقوق محفوظة
           </p>
           <div className="flex gap-4 justify-start">
-            {[
-              { icon: Instagram, hoverBg: 'hover:bg-[#E1306C] hover:border-[#E1306C]' },
-              { isWhatsapp: true, hoverBg: 'hover:bg-[#25D366] hover:border-[#25D366]' },
-              { icon: Facebook, hoverBg: 'hover:bg-[#1877F2] hover:border-[#1877F2]' },
-              { isTelegram: true, hoverBg: 'hover:bg-[#0088cc] hover:border-[#0088cc]' }
-            ].map((item, idx) => (
+            {activeSocials.map((item, idx) => (
               <a 
                 key={idx} 
-                href="#" 
+                href={item.url} 
+                target="_blank"
+                rel="noopener noreferrer"
                 className={`w-10 h-10 rounded-full border border-neutral-700 flex items-center justify-center text-white transition-all group ${item.hoverBg}`}
               >
                 {item.isWhatsapp ? (
@@ -441,6 +540,8 @@ export default function App() {
   const [selectedProductId, setSelectedProductId] = React.useState<string | null>(initialProductId);
   const [selectedCategoryId, setSelectedCategoryId] = React.useState<string>('all');
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  const [isShippingOpen, setIsShippingOpen] = React.useState(false);
+  const [isFaqOpen, setIsFaqOpen] = React.useState(false);
   const [confirmedOrder, setConfirmedOrder] = React.useState<{ productName: string; totalPrice: number; phoneNumber: string } | null>(null);
 
   // Synchronize state with URL on browser back/forward navigation
@@ -562,7 +663,11 @@ export default function App() {
                   />
                 </main>
                 
-                <Footer />
+                <Footer 
+                  onNavigate={setView} 
+                  onShippingRatesOpen={() => setIsShippingOpen(true)} 
+                  onFaqOpen={() => setIsFaqOpen(true)} 
+                />
               </>
             )}
 
@@ -603,6 +708,18 @@ export default function App() {
                 setView('details'); 
                 setIsSearchOpen(false); 
               }} 
+            />
+
+            {/* Real Shipping Rates Modal Overlay */}
+            <ShippingRatesModal 
+              isOpen={isShippingOpen} 
+              onClose={() => setIsShippingOpen(false)} 
+            />
+
+            {/* Real FAQ Modal Overlay */}
+            <FaqModal 
+              isOpen={isFaqOpen} 
+              onClose={() => setIsFaqOpen(false)} 
             />
           </div>
         ) : (

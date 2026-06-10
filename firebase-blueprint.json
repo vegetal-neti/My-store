@@ -94,6 +94,18 @@
         "ctaLink": { "type": "string", "description": "Target redirection link URL" }
       }
     },
+    "SocialSettings": {
+      "title": "SocialSettings",
+      "description": "Global storefront social channel handles and contact information",
+      "type": "object",
+      "properties": {
+        "whatsapp": { "type": "string", "description": "Storefront WhatsApp support phone number" },
+        "instagram": { "type": "string", "description": "Instagram page handle or full URL" },
+        "facebook": { "type": "string", "description": "Facebook page username or full URL" },
+        "telegram": { "type": "string", "description": "Telegram chat link or channel handle" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server modified timestamp" }
+      }
+    },
     "ShippingRate": {
       "title": "ShippingRate",
       "description": "Represents shipping fees and status for an Algerian Wilaya",
@@ -130,6 +142,10 @@
     "settings/{settingName}": {
       "schema": "HeroSettings",
       "description": "Global general storefront configuration settings document"
+    },
+    "settings/social": {
+      "schema": "SocialSettings",
+      "description": "Global social links and support channels configuration"
     },
     "settings/counters": {
       "schema": "OrderCounter",

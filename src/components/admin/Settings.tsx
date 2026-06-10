@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { AdminHeroSettings } from './HeroSettings';
 import { AdminTelegramSettings } from './TelegramSettings';
 import { AdminShippingRatesSettings } from './ShippingRatesSettings';
-import { Image, ChevronDown, ChevronLeft, Send, Truck } from 'lucide-react';
+import { AdminSocialSettings } from './SocialSettings';
+import { Image, ChevronDown, ChevronLeft, Send, Truck, Share2 } from 'lucide-react';
 
-type SectionType = 'hero' | 'telegram' | 'shipping' | null;
+type SectionType = 'hero' | 'telegram' | 'shipping' | 'social' | null;
 
 export const AdminSettings = () => {
   const [expandedSection, setExpandedSection] = useState<SectionType>(null);
@@ -119,6 +120,40 @@ export const AdminSettings = () => {
           {expandedSection === 'telegram' && (
             <div className="border-t border-neutral-150 p-6 bg-neutral-50/30 animate-fade-in">
               <AdminTelegramSettings />
+            </div>
+          )}
+        </div>
+
+        {/* SECTION: SOCIAL SETTINGS */}
+        <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden transition-all duration-300">
+          <button
+            type="button"
+            onClick={() => toggleSection('social')}
+            className="w-full flex items-center justify-between p-5 hover:bg-neutral-50/50 transition-colors text-right outline-none cursor-pointer"
+          >
+            <div className="flex items-center gap-4">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                expandedSection === 'social' ? 'bg-brand-text text-white' : 'bg-neutral-100 text-neutral-500'
+              }`}>
+                <Share2 size={18} />
+              </div>
+              <div>
+                <h3 className="text-[15px] font-semibold text-brand-text">روابط شبكات التواصل الاجتماعي (Social Links)</h3>
+                <p className="text-[12px] text-neutral-400 mt-0.5">تعديل روابط منصات الواتساب، فيسبوك، انستغرام، وتليجرام في فوتر المتجر.</p>
+              </div>
+            </div>
+            <div className="text-neutral-400">
+              {expandedSection === 'social' ? (
+                <ChevronDown size={20} className="transform rotate-180 transition-transform duration-200" />
+              ) : (
+                <ChevronLeft size={20} className="transition-transform duration-200" />
+              )}
+            </div>
+          </button>
+
+          {expandedSection === 'social' && (
+            <div className="border-t border-neutral-150 p-6 bg-neutral-50/30 animate-fade-in">
+              <AdminSocialSettings />
             </div>
           )}
         </div>

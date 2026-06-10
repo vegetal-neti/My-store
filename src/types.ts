@@ -55,6 +55,14 @@ export interface TelegramSettings {
   enabled: boolean;
 }
 
+export interface SocialSettings {
+  whatsapp?: string;
+  instagram?: string;
+  facebook?: string;
+  telegram?: string;
+  updatedAt?: any;
+}
+
 export interface ShippingRate {
   wilayaId: number;
   wilayaName: string;

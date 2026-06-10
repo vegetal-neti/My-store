@@ -180,6 +180,7 @@ let cachedProducts: any[] | null = null;
 let cachedCategories: any[] | null = null;
 let cachedShippingRates: any[] | null = null;
 let cachedHeroSettings: any = null;
+let cachedSocialSettings: any = null;
 
 export const getProducts = async () => {
   try {
@@ -1233,6 +1234,42 @@ export const updateHeroSettings = async (settingsData: any) => {
     cachedHeroSettings = null; // Invalidate cache
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${SETTINGS_COLLECTION}/${HERO_DOCUMENT_ID}`);
+  }
+};
+
+// ==========================================
+// Settings (Social) API
+// ==========================================
+const SOCIAL_DOCUMENT_ID = 'social';
+
+export const getSocialSettings = async () => {
+  try {
+    if (cachedSocialSettings) {
+      return cachedSocialSettings;
+    }
+    const docRef = doc(db, SETTINGS_COLLECTION, SOCIAL_DOCUMENT_ID);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      cachedSocialSettings = data;
+      return data;
+    }
+    return null;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `${SETTINGS_COLLECTION}/${SOCIAL_DOCUMENT_ID}`);
+  }
+};
+
+export const updateSocialSettings = async (settingsData: any) => {
+  try {
+    const docRef = doc(db, SETTINGS_COLLECTION, SOCIAL_DOCUMENT_ID);
+    await setDoc(docRef, {
+      ...settingsData,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    cachedSocialSettings = null; // Invalidate cache
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `${SETTINGS_COLLECTION}/${SOCIAL_DOCUMENT_ID}`);
   }
 };
 
