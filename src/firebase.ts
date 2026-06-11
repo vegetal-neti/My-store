@@ -28,6 +28,7 @@ import {
   getDownloadURL, 
   deleteObject 
 } from 'firebase/storage';
+import { saveToLocalCache, getFromLocalCache } from './lib/cacheHelper';
 
 const firebaseConfig = {
   apiKey: (import.meta as any).env?.VITE_FIREBASE_API_KEY || '',
@@ -189,10 +190,37 @@ export const getProducts = async () => {
     if (cachedProducts) {
       return cachedProducts;
     }
+    
+    const cached = getFromLocalCache<any[]>('products');
+    if (cached) {
+      cachedProducts = cached.data;
+      const TTL = 300000; // 5 minutes standard for lists
+      if (Date.now() - cached.timestamp < TTL) {
+        return cached.data;
+      }
+      
+      // Expired: Background update
+      (async () => {
+        try {
+          const q = query(collection(db, PRODUCTS_COLLECTION));
+          const snapshot = await getDocs(q);
+          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          cachedProducts = data;
+          saveToLocalCache('products', data);
+        } catch (err) {
+          console.warn("Background product fetch failed:", err);
+        }
+      })();
+      
+      return cached.data;
+    }
+    
+    // No cache: Foreground fetch
     const q = query(collection(db, PRODUCTS_COLLECTION));
     const snapshot = await getDocs(q);
     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     cachedProducts = data;
+    saveToLocalCache('products', data);
     return data;
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, PRODUCTS_COLLECTION);
@@ -210,21 +238,31 @@ export const getProductsWithLimit = async (limitNum: number, categoryId: string 
       return filtered.slice(0, limitNum);
     }
 
-    let q;
-    if (categoryId && categoryId !== 'all') {
-      q = query(
-        collection(db, PRODUCTS_COLLECTION),
-        where('categoryId', '==', categoryId),
-        limit(limitNum)
-      );
-    } else {
-      q = query(
-        collection(db, PRODUCTS_COLLECTION),
-        limit(limitNum)
-      );
+    const cached = getFromLocalCache<any[]>('products');
+    if (cached) {
+      cachedProducts = cached.data;
+      let filtered = cached.data;
+      if (categoryId && categoryId !== 'all') {
+        filtered = cached.data.filter((p: any) => p.categoryId === categoryId);
+      }
+      
+      // Check TTL and fetch background if needed
+      const TTL = 300000; // 5 minutes
+      if (Date.now() - cached.timestamp >= TTL) {
+        getProducts().catch(err => console.warn(err));
+      }
+      return filtered.slice(0, limitNum);
     }
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+
+    const data = await getProducts();
+    if (data) {
+      let filtered = data;
+      if (categoryId && categoryId !== 'all') {
+        filtered = data.filter((p: any) => p.categoryId === categoryId);
+      }
+      return filtered.slice(0, limitNum);
+    }
+    return [];
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, PRODUCTS_COLLECTION);
     return [];
@@ -237,6 +275,20 @@ export const getProductById = async (id: string) => {
       const found = cachedProducts.find((p: any) => p.id === id);
       if (found) return found;
     }
+    
+    const cached = getFromLocalCache<any[]>('products');
+    if (cached) {
+      cachedProducts = cached.data;
+      const found = cached.data.find((p: any) => p.id === id);
+      if (found) {
+        const TTL = 300000;
+        if (Date.now() - cached.timestamp >= TTL) {
+          getProducts().catch(err => console.warn(err));
+        }
+        return found;
+      }
+    }
+    
     const docRef = doc(db, PRODUCTS_COLLECTION, id);
     const snap = await getDoc(docRef);
     if (snap.exists()) {
@@ -901,10 +953,36 @@ export const getCategories = async () => {
     if (cachedCategories) {
       return cachedCategories;
     }
+    
+    const cached = getFromLocalCache<any[]>('categories');
+    if (cached) {
+      cachedCategories = cached.data;
+      const TTL = 1800000; // 30 mins
+      if (Date.now() - cached.timestamp < TTL) {
+        return cached.data;
+      }
+      
+      // Expired: Background update
+      (async () => {
+        try {
+          const q = query(collection(db, CATEGORIES_COLLECTION), orderBy('displayOrder', 'asc'));
+          const snapshot = await getDocs(q);
+          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          cachedCategories = data;
+          saveToLocalCache('categories', data);
+        } catch (err) {
+          console.warn("Background categories fetch failed:", err);
+        }
+      })();
+      
+      return cached.data;
+    }
+    
     const q = query(collection(db, CATEGORIES_COLLECTION), orderBy('displayOrder', 'asc'));
     const snapshot = await getDocs(q);
     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     cachedCategories = data;
+    saveToLocalCache('categories', data);
     return data;
   } catch (error) {
     // Treat error gracefully if collection does not exist yet or displayOrder does not have index
@@ -913,6 +991,7 @@ export const getCategories = async () => {
       const snapshot = await getDocs(qFallback);
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       cachedCategories = data;
+      saveToLocalCache('categories', data);
       return data;
     } catch (fallbackError) {
       handleFirestoreError(fallbackError, OperationType.LIST, CATEGORIES_COLLECTION);
@@ -1213,11 +1292,39 @@ export const getHeroSettings = async () => {
     if (cachedHeroSettings) {
       return cachedHeroSettings;
     }
+    
+    const cached = getFromLocalCache<any>('hero_settings');
+    if (cached) {
+      cachedHeroSettings = cached.data;
+      const TTL = 900000; // 15 mins
+      if (Date.now() - cached.timestamp < TTL) {
+        return cached.data;
+      }
+      
+      // Expired: Background update
+      (async () => {
+        try {
+          const docRef = doc(db, SETTINGS_COLLECTION, HERO_DOCUMENT_ID);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            const data = snap.data();
+            cachedHeroSettings = data;
+            saveToLocalCache('hero_settings', data);
+          }
+        } catch (err) {
+          console.warn("Background hero refresh failed:", err);
+        }
+      })();
+      
+      return cached.data;
+    }
+    
     const docRef = doc(db, SETTINGS_COLLECTION, HERO_DOCUMENT_ID);
     const snap = await getDoc(docRef);
     if (snap.exists()) {
       const data = snap.data();
       cachedHeroSettings = data;
+      saveToLocalCache('hero_settings', data);
       return data;
     }
     return null;
@@ -1249,11 +1356,39 @@ export const getSocialSettings = async () => {
     if (cachedSocialSettings) {
       return cachedSocialSettings;
     }
+    
+    const cached = getFromLocalCache<any>('social_settings');
+    if (cached) {
+      cachedSocialSettings = cached.data;
+      const TTL = 3600000; // 60 mins
+      if (Date.now() - cached.timestamp < TTL) {
+        return cached.data;
+      }
+      
+      // Expired: Background update
+      (async () => {
+        try {
+          const docRef = doc(db, SETTINGS_COLLECTION, SOCIAL_DOCUMENT_ID);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            const data = snap.data();
+            cachedSocialSettings = data;
+            saveToLocalCache('social_settings', data);
+          }
+        } catch (err) {
+          console.warn("Background social refresh failed", err);
+        }
+      })();
+      
+      return cached.data;
+    }
+    
     const docRef = doc(db, SETTINGS_COLLECTION, SOCIAL_DOCUMENT_ID);
     const snap = await getDoc(docRef);
     if (snap.exists()) {
       const data = snap.data();
       cachedSocialSettings = data;
+      saveToLocalCache('social_settings', data);
       return data;
     }
     return null;
@@ -1323,6 +1458,31 @@ export const getShippingRates = async () => {
     if (cachedShippingRates) {
       return cachedShippingRates;
     }
+    
+    const cached = getFromLocalCache<any[]>('shipping_rates');
+    if (cached) {
+      cachedShippingRates = cached.data;
+      const TTL = 3600000; // 60 mins
+      if (Date.now() - cached.timestamp < TTL) {
+        return cached.data;
+      }
+      
+      // Expired: Background update
+      (async () => {
+        try {
+          const q = query(collection(db, SHIPPING_RATES_COLLECTION));
+          const snapshot = await getDocs(q);
+          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          cachedShippingRates = data;
+          saveToLocalCache('shipping_rates', data);
+        } catch (err) {
+          console.warn("Background shipping rates fetch failed:", err);
+        }
+      })();
+      
+      return cached.data;
+    }
+    
     const q = query(collection(db, SHIPPING_RATES_COLLECTION));
     const snapshot = await getDocs(q);
     const data = snapshot.docs.map(doc => ({ 
@@ -1330,6 +1490,7 @@ export const getShippingRates = async () => {
       ...doc.data() 
     }));
     cachedShippingRates = data;
+    saveToLocalCache('shipping_rates', data);
     return data;
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, SHIPPING_RATES_COLLECTION);

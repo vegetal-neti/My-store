@@ -3,17 +3,18 @@ import { Menu, Search, ArrowRight, Plus, Facebook, Instagram, MessageCircle, Sen
 import { Sidebar } from './components/Sidebar';
 import { AuthProvider } from './context/AuthContext';
 import { Product } from './types';
-import { AdminDashboard } from './components/AdminDashboard';
-import { ProductDetails } from './components/ProductDetails';
-import { SearchModal } from './components/SearchModal';
-import { ThankYou } from './components/ThankYou';
-import { AllProducts } from './components/AllProducts';
-import { ShippingRatesModal } from './components/ShippingRatesModal';
-import { FaqModal } from './components/FaqModal';
 import { getRouteUrl, navigateDeviceAware } from './lib/dynamicRouting';
 import { getSocialSettings } from './firebase';
-import { TermsPage } from './components/TermsPage';
-import { PrivacyPage } from './components/PrivacyPage';
+
+const AdminDashboard = React.lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const ProductDetails = React.lazy(() => import('./components/ProductDetails').then(m => ({ default: m.ProductDetails })));
+const SearchModal = React.lazy(() => import('./components/SearchModal').then(m => ({ default: m.SearchModal })));
+const ThankYou = React.lazy(() => import('./components/ThankYou').then(m => ({ default: m.ThankYou })));
+const AllProducts = React.lazy(() => import('./components/AllProducts').then(m => ({ default: m.AllProducts })));
+const ShippingRatesModal = React.lazy(() => import('./components/ShippingRatesModal').then(m => ({ default: m.ShippingRatesModal })));
+const FaqModal = React.lazy(() => import('./components/FaqModal').then(m => ({ default: m.FaqModal })));
+const TermsPage = React.lazy(() => import('./components/TermsPage').then(m => ({ default: m.TermsPage })));
+const PrivacyPage = React.lazy(() => import('./components/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
 
 const Header = ({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSearchClick: () => void }) => {
   return (
@@ -98,20 +99,24 @@ const Hero = ({ onCtaClick }: { onCtaClick: (categoryId: string) => void }) => {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
+    let active = true;
     const fetchHero = async () => {
       try {
         const { getHeroSettings } = await import('./firebase');
         const data = await getHeroSettings();
-        if (data) {
+        if (active && data) {
           setSettings(data);
         }
       } catch (err) {
         console.error("Error loading hero banner details", err);
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
     fetchHero();
+    return () => { active = false; };
   }, []);
 
   const badgeText = settings?.badge || 'Spring / Summer 26';
@@ -136,18 +141,27 @@ const Hero = ({ onCtaClick }: { onCtaClick: (categoryId: string) => void }) => {
       <div 
         className="h-[480px] rounded-[2rem] p-7 flex flex-col justify-end relative overflow-hidden transition-all duration-500 hover:shadow-md"
         style={{
-          backgroundColor: imageUrl ? 'transparent' : 'var(--color-brand-hero)',
-          backgroundImage: imageUrl ? `url('${imageUrl}')` : 'none',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
+          backgroundColor: imageUrl ? 'transparent' : 'var(--color-brand-hero)'
         }}
       >
-        {/* Subtle overlay to enhance text readability over user uploaded images */}
         {imageUrl && (
-          <div className="absolute inset-0 bg-neutral-950/25 z-0" />
+          <img 
+            src={imageUrl} 
+            alt={titleText} 
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+            className="absolute inset-0 w-full h-full object-cover z-0"
+            referrerPolicy="no-referrer"
+          />
         )}
 
-        <div className="relative z-10 flex flex-col items-start max-w-full">
+        {/* Subtle overlay to enhance text readability over user uploaded images */}
+        {imageUrl && (
+          <div className="absolute inset-0 bg-neutral-950/25 z-10" />
+        )}
+
+        <div className="relative z-20 flex flex-col items-start max-w-full">
           {badgeText && (
             <p className="text-[10px] tracking-[0.22em] font-semibold text-white/95 mb-3 uppercase drop-shadow-sm">
               {badgeText}
@@ -163,7 +177,7 @@ const Hero = ({ onCtaClick }: { onCtaClick: (categoryId: string) => void }) => {
           )}
           <button 
             onClick={() => onCtaClick(ctaLinkValue)}
-            className="bg-white/95 hover:bg-white active:scale-95 transition-all text-brand-text rounded-full py-3.5 px-6 flex items-center justify-between w-[220px] shadow-sm group"
+            className="bg-white/95 hover:bg-white active:scale-95 transition-all text-brand-text rounded-full py-3.5 px-6 flex items-center justify-between w-[220px] shadow-sm group cursor-pointer"
           >
             <span className="text-sm font-semibold tracking-wide">{buttonText}</span>
             <ArrowRight size={18} strokeWidth={1.5} className="group-hover:translate-x-1 transition-transform" />
@@ -178,27 +192,58 @@ export interface ProductCardProps extends Product {
   onSelect?: () => void;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = (props) => {
-  const { title, name, description, image, price, oldPrice, rating, reviews, badge, bgColor, onSelect } = props;
+export const ProductCard: React.FC<ProductCardProps> = React.memo((props) => {
+  const { id, title, name, description, image, price, oldPrice, rating, reviews, badge, bgColor, onSelect } = props;
   const bgClass = bgColor === 'gray' ? 'bg-brand-card-gray' : (bgColor === 'beige' ? 'bg-brand-card-beige' : 'bg-neutral-100');
   
   const [imageLoaded, setImageLoaded] = React.useState(false);
+  const cardRef = React.useRef<HTMLDivElement>(null);
   
   const displayTitle = name || title || 'Unnamed Product';
   const isArabic = (text?: string) => text ? /[\u0600-\u06FF]/.test(text) : false;
   const isTitleArabic = isArabic(displayTitle);
 
-  // Custom SVG to replicate the exact Star icon style from the image
-  const StarIcon = () => (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="text-brand-text">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  );
+  // IntersectionObserver for prefetching when card enters viewport
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || !id) return;
+    if (!('IntersectionObserver' in window)) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          // Prefetch component files
+          import('./lib/prefetchHelper').then(m => m.prefetchComponent('details')).catch(() => {});
+          // Prefetch product Firestore data from cash
+          import('./firebase').then(m => m.getProductById(id)).catch(() => {});
+          
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: '100px' });
+
+    if (cardRef.current) {
+      observer.observe(cardRef.current);
+    }
+    return () => observer.disconnect();
+  }, [id]);
+
+  // Interaction Prefetch handlers for Hover and Touch
+  const handlePrefetch = React.useCallback(() => {
+    if (!id) return;
+    import('./lib/prefetchHelper').then(m => m.prefetchComponent('details')).catch(() => {});
+    import('./firebase').then(m => m.getProductById(id)).catch(() => {});
+  }, [id]);
 
   const hasDiscount = oldPrice && oldPrice > price;
 
   return (
-    <div className="flex flex-col group cursor-pointer h-full" onClick={onSelect}>
+    <div 
+      ref={cardRef}
+      className="flex flex-col group cursor-pointer h-full" 
+      onClick={onSelect}
+      onMouseEnter={handlePrefetch}
+      onTouchStart={handlePrefetch}
+    >
       <div className={`relative aspect-[4/5] rounded-2xl ${image ? 'bg-neutral-100 overflow-hidden' : bgClass} mb-3 p-3 flex flex-col justify-between`}>
         {image && (
           <>
@@ -209,6 +254,7 @@ export const ProductCard: React.FC<ProductCardProps> = (props) => {
               src={image} 
               alt={displayTitle} 
               loading="lazy"
+              decoding="async"
               onLoad={() => setImageLoaded(true)}
               className={`absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`} 
               referrerPolicy="no-referrer" 
@@ -248,7 +294,9 @@ export const ProductCard: React.FC<ProductCardProps> = (props) => {
       )}
     </div>
   );
-};
+});
+
+ProductCard.displayName = 'ProductCard';
 
 const BestSellers = ({ 
   selectedCategoryId, 
@@ -343,7 +391,7 @@ const BestSellers = ({
   );
 };
 
-const Footer = ({ 
+const Footer = React.memo(({ 
   onNavigate, 
   onShippingRatesOpen,
   onFaqOpen
@@ -358,6 +406,37 @@ const Footer = ({
     facebook?: string;
     telegram?: string;
   } | null>(null);
+
+  const footerRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!('IntersectionObserver' in window)) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          import('./lib/prefetchHelper').then(m => {
+            m.prefetchComponent('shipping');
+            m.prefetchComponent('faq');
+            m.prefetchComponent('products');
+            m.prefetchComponent('terms');
+            m.prefetchComponent('privacy');
+          }).catch(() => {});
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: '120px' });
+
+    if (footerRef.current) {
+      observer.observe(footerRef.current);
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  const handlePrefetch = React.useCallback((name: string) => {
+    import('./lib/prefetchHelper').then(m => m.prefetchComponent(name)).catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     let active = true;
@@ -411,7 +490,7 @@ const Footer = ({
   ].filter(item => item.url) : [];
 
   return (
-    <footer className="bg-brand-footer text-white px-6 pt-8 pb-5 rounded-t-3xl sm:rounded-none mt-auto">
+    <footer ref={footerRef} className="bg-brand-footer text-white px-6 pt-8 pb-5 rounded-t-3xl sm:rounded-none mt-auto">
       <div className="max-w-md mx-auto">
         <h2 className="font-serif italic text-3xl mb-2">ShopLix</h2>
         <p className="text-neutral-400 text-[14px] sm:text-[15px] leading-relaxed mb-6 text-right" dir="rtl">
@@ -425,6 +504,8 @@ const Footer = ({
               <li>
                 <button 
                   onClick={(e) => { e.preventDefault(); onShippingRatesOpen(); }}
+                  onMouseEnter={() => handlePrefetch('shipping')}
+                  onTouchStart={() => handlePrefetch('shipping')}
                   className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
                 >
                   اسعار التوصيل
@@ -436,6 +517,8 @@ const Footer = ({
               <li>
                 <button 
                   onClick={(e) => { e.preventDefault(); onFaqOpen(); }}
+                  onMouseEnter={() => handlePrefetch('faq')}
+                  onTouchStart={() => handlePrefetch('faq')}
                   className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
                 >
                   الأسئلة الشائعة (FAQ)
@@ -461,6 +544,8 @@ const Footer = ({
               <li>
                 <button 
                   onClick={(e) => { e.preventDefault(); onNavigate('products'); }}
+                  onMouseEnter={() => handlePrefetch('products')}
+                  onTouchStart={() => handlePrefetch('products')}
                   className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
                 >
                   منتجاتنا
@@ -469,6 +554,8 @@ const Footer = ({
               <li>
                 <button 
                   onClick={(e) => { e.preventDefault(); onNavigate('terms'); }}
+                  onMouseEnter={() => handlePrefetch('terms')}
+                  onTouchStart={() => handlePrefetch('terms')}
                   className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
                 >
                   شروط الاستخدام
@@ -477,6 +564,8 @@ const Footer = ({
               <li>
                 <button 
                   onClick={(e) => { e.preventDefault(); onNavigate('privacy'); }}
+                  onMouseEnter={() => handlePrefetch('privacy')}
+                  onTouchStart={() => handlePrefetch('privacy')}
                   className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
                 >
                   سياسة الخصوصية
@@ -517,7 +606,9 @@ const Footer = ({
       </div>
     </footer>
   );
-};
+});
+
+Footer.displayName = 'Footer';
 
 export default function App() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -699,67 +790,91 @@ export default function App() {
             )}
 
             {view === 'products' && (
-              <AllProducts 
-                onBack={() => setView('home')} 
-                onProductSelect={(id) => { setSelectedProductId(id); setView('details'); }}
-                initialCategoryId={selectedCategoryId}
-              />
+              <React.Suspense fallback={<div className="flex-1 flex items-center justify-center py-20 bg-brand-bg text-[13px] text-neutral-400">Loading...</div>}>
+                <AllProducts 
+                  onBack={() => setView('home')} 
+                  onProductSelect={(id) => { setSelectedProductId(id); setView('details'); }}
+                  initialCategoryId={selectedCategoryId}
+                />
+              </React.Suspense>
             )}
 
             {view === 'terms' && (
-              <TermsPage onBack={() => setView('home')} />
+              <React.Suspense fallback={<div className="flex-1 flex items-center justify-center py-20 bg-brand-bg text-[13px] text-neutral-400">Loading...</div>}>
+                <TermsPage onBack={() => setView('home')} />
+              </React.Suspense>
             )}
 
             {view === 'privacy' && (
-              <PrivacyPage onBack={() => setView('home')} />
+              <React.Suspense fallback={<div className="flex-1 flex items-center justify-center py-20 bg-brand-bg text-[13px] text-neutral-400">Loading...</div>}>
+                <PrivacyPage onBack={() => setView('home')} />
+              </React.Suspense>
             )}
 
             {view === 'details' && selectedProductId && (
-              <ProductDetails 
-                productId={selectedProductId} 
-                onBack={() => setView('home')} 
-                onOrderSuccess={(orderInfo) => {
-                  setConfirmedOrder(orderInfo);
-                  setView('thank-you');
-                }}
-              />
+              <React.Suspense fallback={<div className="flex-1 flex items-center justify-center py-20 bg-brand-bg text-[13px] text-neutral-400">Loading...</div>}>
+                <ProductDetails 
+                  productId={selectedProductId} 
+                  onBack={() => setView('home')} 
+                  onOrderSuccess={(orderInfo) => {
+                    setConfirmedOrder(orderInfo);
+                    setView('thank-you');
+                  }}
+                />
+              </React.Suspense>
             )}
 
             {view === 'thank-you' && confirmedOrder && (
-              <ThankYou 
-                productName={confirmedOrder.productName} 
-                totalPrice={confirmedOrder.totalPrice} 
-                phone={confirmedOrder.phoneNumber} 
-                onContinue={() => setView('home')} 
-              />
+              <React.Suspense fallback={<div className="flex-1 flex items-center justify-center py-20 bg-brand-bg text-[13px] text-neutral-400">Loading...</div>}>
+                <ThankYou 
+                  productName={confirmedOrder.productName} 
+                  totalPrice={confirmedOrder.totalPrice} 
+                  phone={confirmedOrder.phoneNumber} 
+                  onContinue={() => setView('home')} 
+                />
+              </React.Suspense>
             )}
 
             {/* Real Search Modal Overlay */}
-            <SearchModal 
-              isOpen={isSearchOpen} 
-              onClose={() => setIsSearchOpen(false)} 
-              onSelectProduct={(id) => { 
-                setSelectedProductId(id); 
-                setView('details'); 
-                setIsSearchOpen(false); 
-              }} 
-            />
+            {isSearchOpen && (
+              <React.Suspense fallback={null}>
+                <SearchModal 
+                  isOpen={isSearchOpen} 
+                  onClose={() => setIsSearchOpen(false)} 
+                  onSelectProduct={(id) => { 
+                    setSelectedProductId(id); 
+                    setView('details'); 
+                    setIsSearchOpen(false); 
+                  }} 
+                />
+              </React.Suspense>
+            )}
 
             {/* Real Shipping Rates Modal Overlay */}
-            <ShippingRatesModal 
-              isOpen={isShippingOpen} 
-              onClose={() => setIsShippingOpen(false)} 
-            />
+            {isShippingOpen && (
+              <React.Suspense fallback={null}>
+                <ShippingRatesModal 
+                  isOpen={isShippingOpen} 
+                  onClose={() => setIsShippingOpen(false)} 
+                />
+              </React.Suspense>
+            )}
 
             {/* Real FAQ Modal Overlay */}
-            <FaqModal 
-              isOpen={isFaqOpen} 
-              onClose={() => setIsFaqOpen(false)} 
-            />
+            {isFaqOpen && (
+              <React.Suspense fallback={null}>
+                <FaqModal 
+                  isOpen={isFaqOpen} 
+                  onClose={() => setIsFaqOpen(false)} 
+                />
+              </React.Suspense>
+            )}
           </div>
         ) : (
           <div className="w-full min-h-screen bg-neutral-50 relative">
-            <AdminDashboard onBack={() => setView('home')} />
+            <React.Suspense fallback={<div className="w-full min-h-screen flex items-center justify-center text-sm text-neutral-500">Loading Admin...</div>}>
+              <AdminDashboard onBack={() => setView('home')} />
+            </React.Suspense>
           </div>
         )}
       </div>
