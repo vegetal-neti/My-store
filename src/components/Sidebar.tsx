@@ -128,18 +128,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate })
 
           <a href="#" className="py-4 text-[15px] font-medium text-brand-text border-b border-neutral-200/60 hover:text-neutral-500 transition-colors">Language & Region</a>
           <a href="#" className="py-4 text-[15px] font-medium text-brand-text border-b border-neutral-200/60 hover:text-neutral-500 transition-colors">Contact Us</a>
-          <button 
-            onClick={() => { onNavigate?.('terms'); onClose(); }}
-            className="py-4 text-[15px] font-medium text-brand-text border-b border-neutral-200/60 hover:text-neutral-500 transition-colors text-left w-full cursor-pointer"
-          >
-            Terms of Service
-          </button>
-          <button 
-            onClick={() => { onNavigate?.('privacy'); onClose(); }}
-            className="py-4 text-[15px] font-medium text-brand-text border-b border-neutral-200/60 hover:text-neutral-500 transition-colors text-left w-full cursor-pointer"
-          >
-            Privacy Policy
-          </button>
         </div>
       </div>
     </>
