@@ -143,7 +143,7 @@ export const TermsPage: React.FC<TermsPageProps> = ({ onBack }) => {
         <div className="border-t border-neutral-100 pt-5 space-y-2">
           <h3 className="text-[14px] font-bold text-brand-text">هل لديك أي استفسار قانوني؟</h3>
           <p className="text-[13px] text-neutral-500 leading-relaxed">
-            إذا كان لديكم أي أسئلة أو بحاجة لشروحات بخصوص شروط الخدمة الخاصة بنا، يسعدنا تواصلكم المباشر مع فريق الدعم الفني وخدمة عملاء Shoplix عبر حساباتنا أو صفحة اتصل بنا.
+            إذا كان لديكم أي أسئلة أو بحاجة لشروحات بخصوص شروط الخدمة الخاصة بنا، يسعدنا تواصلكم المباشر مع فريق الدعم الفني وخدمة عملاء Shoplix عبر حساباتنا.
           </p>
         </div>
 

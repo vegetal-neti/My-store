@@ -441,14 +441,6 @@ const Footer = ({
                   الأسئلة الشائعة (FAQ)
                 </button>
               </li>
-              <li>
-                <button 
-                  onClick={(e) => { e.preventDefault(); onNavigate('privacy'); }}
-                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
-                >
-                  سياسة الخصوصية (Privacy)
-                </button>
-              </li>
             </ul>
           </div>
           <div>
@@ -475,14 +467,19 @@ const Footer = ({
                 </button>
               </li>
               <li>
-                <a href="#" className="text-[15px] text-neutral-400 hover:text-white transition-colors">تواصل معنا</a>
-              </li>
-              <li>
                 <button 
                   onClick={(e) => { e.preventDefault(); onNavigate('terms'); }}
                   className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
                 >
-                  شروط الاستخدام (Terms)
+                  شروط الاستخدام
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={(e) => { e.preventDefault(); onNavigate('privacy'); }}
+                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
+                >
+                  سياسة الخصوصية
                 </button>
               </li>
             </ul>
@@ -710,25 +707,11 @@ export default function App() {
             )}
 
             {view === 'terms' && (
-              <>
-                <TermsPage onBack={() => setView('home')} />
-                <Footer 
-                  onNavigate={setView} 
-                  onShippingRatesOpen={() => setIsShippingOpen(true)} 
-                  onFaqOpen={() => setIsFaqOpen(true)} 
-                />
-              </>
+              <TermsPage onBack={() => setView('home')} />
             )}
 
             {view === 'privacy' && (
-              <>
-                <PrivacyPage onBack={() => setView('home')} />
-                <Footer 
-                  onNavigate={setView} 
-                  onShippingRatesOpen={() => setIsShippingOpen(true)} 
-                  onFaqOpen={() => setIsFaqOpen(true)} 
-                />
-              </>
+              <PrivacyPage onBack={() => setView('home')} />
             )}
 
             {view === 'details' && selectedProductId && (
