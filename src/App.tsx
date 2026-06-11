@@ -12,6 +12,8 @@ import { ShippingRatesModal } from './components/ShippingRatesModal';
 import { FaqModal } from './components/FaqModal';
 import { getRouteUrl, navigateDeviceAware } from './lib/dynamicRouting';
 import { getSocialSettings } from './firebase';
+import { TermsPage } from './components/TermsPage';
+import { PrivacyPage } from './components/PrivacyPage';
 
 const Header = ({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSearchClick: () => void }) => {
   return (
@@ -346,7 +348,7 @@ const Footer = ({
   onShippingRatesOpen,
   onFaqOpen
 }: { 
-  onNavigate: (view: 'home' | 'checkout' | 'success' | 'admin' | 'details' | 'thank-you' | 'products') => void;
+  onNavigate: (view: 'home' | 'checkout' | 'success' | 'admin' | 'details' | 'thank-you' | 'products' | 'terms' | 'privacy') => void;
   onShippingRatesOpen: () => void;
   onFaqOpen: () => void;
 }) => {
@@ -423,7 +425,7 @@ const Footer = ({
               <li>
                 <button 
                   onClick={(e) => { e.preventDefault(); onShippingRatesOpen(); }}
-                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full"
+                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
                 >
                   اسعار التوصيل
                 </button>
@@ -434,9 +436,17 @@ const Footer = ({
               <li>
                 <button 
                   onClick={(e) => { e.preventDefault(); onFaqOpen(); }}
-                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full"
+                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
                 >
                   الأسئلة الشائعة (FAQ)
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={(e) => { e.preventDefault(); onNavigate('privacy'); }}
+                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
+                >
+                  سياسة الخصوصية (Privacy)
                 </button>
               </li>
             </ul>
@@ -451,7 +461,7 @@ const Footer = ({
                     onNavigate('home'); 
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full"
+                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
                 >
                   الرئيسية
                 </button>
@@ -459,13 +469,21 @@ const Footer = ({
               <li>
                 <button 
                   onClick={(e) => { e.preventDefault(); onNavigate('products'); }}
-                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full"
+                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
                 >
                   منتجاتنا
                 </button>
               </li>
               <li>
                 <a href="#" className="text-[15px] text-neutral-400 hover:text-white transition-colors">تواصل معنا</a>
+              </li>
+              <li>
+                <button 
+                  onClick={(e) => { e.preventDefault(); onNavigate('terms'); }}
+                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
+                >
+                  شروط الاستخدام (Terms)
+                </button>
               </li>
             </ul>
           </div>
@@ -510,13 +528,17 @@ export default function App() {
   // Synchronously parse initial state from current URL path before first render to prevent race conditions
   const getInitialStateFromURL = () => {
     const path = typeof window !== 'undefined' ? window.location.pathname : '/';
-    let initialView: 'home' | 'admin' | 'details' | 'thank-you' | 'products' = 'home';
+    let initialView: 'home' | 'admin' | 'details' | 'thank-you' | 'products' | 'terms' | 'privacy' = 'home';
     let initialProductId: string | null = null;
 
     if (path === '/admin') {
       initialView = 'admin';
     } else if (path === '/products') {
       initialView = 'products';
+    } else if (path === '/terms') {
+      initialView = 'terms';
+    } else if (path === '/privacy') {
+      initialView = 'privacy';
     } else if (path.startsWith('/product/')) {
       let id = path.split('/product/')[1];
       if (id) {
@@ -536,7 +558,7 @@ export default function App() {
 
   const { initialView, initialProductId } = getInitialStateFromURL();
 
-  const [view, setView] = React.useState<'home' | 'checkout' | 'success' | 'admin' | 'details' | 'thank-you' | 'products'>(initialView);
+  const [view, setView] = React.useState<'home' | 'checkout' | 'success' | 'admin' | 'details' | 'thank-you' | 'products' | 'terms' | 'privacy'>(initialView);
   const [selectedProductId, setSelectedProductId] = React.useState<string | null>(initialProductId);
   const [selectedCategoryId, setSelectedCategoryId] = React.useState<string>('all');
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
@@ -552,6 +574,10 @@ export default function App() {
         setView('admin');
       } else if (path === '/products') {
         setView('products');
+      } else if (path === '/terms') {
+        setView('terms');
+      } else if (path === '/privacy') {
+        setView('privacy');
       } else if (path.startsWith('/product/')) {
         let id = path.split('/product/')[1];
         if (id) {
@@ -589,6 +615,10 @@ export default function App() {
       expectedPath = `/product/${selectedProductId}`;
     } else if (view === 'thank-you') {
       expectedPath = '/thank-you';
+    } else if (view === 'terms') {
+      expectedPath = '/terms';
+    } else if (view === 'privacy') {
+      expectedPath = '/privacy';
     }
 
     if (currentPath !== expectedPath) {
@@ -677,6 +707,28 @@ export default function App() {
                 onProductSelect={(id) => { setSelectedProductId(id); setView('details'); }}
                 initialCategoryId={selectedCategoryId}
               />
+            )}
+
+            {view === 'terms' && (
+              <>
+                <TermsPage onBack={() => setView('home')} />
+                <Footer 
+                  onNavigate={setView} 
+                  onShippingRatesOpen={() => setIsShippingOpen(true)} 
+                  onFaqOpen={() => setIsFaqOpen(true)} 
+                />
+              </>
+            )}
+
+            {view === 'privacy' && (
+              <>
+                <PrivacyPage onBack={() => setView('home')} />
+                <Footer 
+                  onNavigate={setView} 
+                  onShippingRatesOpen={() => setIsShippingOpen(true)} 
+                  onFaqOpen={() => setIsFaqOpen(true)} 
+                />
+              </>
             )}
 
             {view === 'details' && selectedProductId && (
