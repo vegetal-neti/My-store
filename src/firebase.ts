@@ -31,7 +31,9 @@ import {
 
 const firebaseConfig = {
   apiKey: (import.meta as any).env?.VITE_FIREBASE_API_KEY || '',
-  authDomain: (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN || '',
+  authDomain: typeof window !== 'undefined' && (window.location.hostname.includes('shoplix.one') || window.location.hostname.includes('vercel.app'))
+    ? window.location.hostname
+    : ((import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN || ''),
   projectId: (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID || '',
   storageBucket: (import.meta as any).env?.VITE_FIREBASE_STORAGE_BUCKET || '',
   messagingSenderId: (import.meta as any).env?.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
