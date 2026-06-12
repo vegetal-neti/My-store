@@ -64,13 +64,27 @@ export function getRouteUrl(type: 'whatsapp' | 'instagram' | 'facebook' | 'teleg
     }
     
     case 'instagram': {
-      // If full HTTP link is provided, return as is (which will act as Universal Link)
-      if (value.startsWith('http')) {
-        return value;
+      let username = value.trim();
+      if (username.startsWith('http://') || username.startsWith('https://')) {
+        try {
+          const urlObj = new URL(username);
+          const segments = urlObj.pathname.split('/').filter(Boolean);
+          if (segments.length > 0) {
+            username = segments[0];
+          }
+        } catch (e) {
+          const parts = username.split('instagram.com/');
+          if (parts.length > 1) {
+            username = parts[1].split('/')[0].split('?')[0];
+          }
+        }
       }
-      // If it's a handle, build an elegant HTTPS URL
-      // This behaves as a Universal Link on modern smartphones (intercepted by Instagram native client)
-      return `https://instagram.com/${value.replace('@', '')}`;
+      username = username.replace(/^@/, '').trim().split('/')[0].split('?')[0];
+      const { isMobile } = getDeviceInfo();
+      if (isMobile && username) {
+        return `instagram://user?username=${username}`;
+      }
+      return `https://instagram.com/${username}`;
     }
 
     case 'facebook': {

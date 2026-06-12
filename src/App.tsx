@@ -3,7 +3,7 @@ import { Menu, Search, ArrowRight, Plus, Facebook, Instagram, MessageCircle, Sen
 import { Sidebar } from './components/Sidebar';
 import { AuthProvider } from './context/AuthContext';
 import { Product } from './types';
-import { getRouteUrl, navigateDeviceAware } from './lib/dynamicRouting';
+import { getRouteUrl, navigateDeviceAware, getDeviceInfo } from './lib/dynamicRouting';
 import { getSocialSettings } from './firebase';
 
 const AdminDashboard = React.lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
@@ -459,6 +459,30 @@ const Footer = React.memo(({
     const trimmed = value.trim();
     if (!trimmed) return '';
     
+    if (type === 'instagram') {
+      let username = trimmed;
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        try {
+          const urlObj = new URL(trimmed);
+          const segments = urlObj.pathname.split('/').filter(Boolean);
+          if (segments.length > 0) {
+            username = segments[0];
+          }
+        } catch (e) {
+          const parts = trimmed.split('instagram.com/');
+          if (parts.length > 1) {
+            username = parts[1].split('/')[0].split('?')[0];
+          }
+        }
+      }
+      username = username.replace(/^@/, '').trim().split('/')[0].split('?')[0];
+      const { isMobile } = getDeviceInfo();
+      if (isMobile && username) {
+        return `instagram://user?username=${username}`;
+      }
+      return `https://instagram.com/${username}`;
+    }
+
     if (type === 'whatsapp') {
       const cleanDigits = trimmed.replace(/\D/g, '');
       return cleanDigits ? `https://wa.me/${cleanDigits}` : '';
@@ -469,9 +493,6 @@ const Footer = React.memo(({
     }
     
     // Support fallback handles
-    if (type === 'instagram') {
-      return `https://instagram.com/${trimmed.replace(/^@/, '')}`;
-    }
     if (type === 'facebook') {
       return `https://facebook.com/${trimmed}`;
     }

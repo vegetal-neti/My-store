@@ -306,7 +306,10 @@ export const addProduct = async (productData: any) => {
       ...productData,
       createdAt: serverTimestamp()
     });
-    cachedProducts = null; // Invalidate cache
+    cachedProducts = null; // Invalidate memory cache
+    try {
+      localStorage.removeItem('shoplix_cache_products'); // Invalidate local storage cache
+    } catch (e) {}
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, PRODUCTS_COLLECTION);
@@ -320,7 +323,10 @@ export const updateProduct = async (id: string, productData: any) => {
       ...productData,
       updatedAt: serverTimestamp()
     });
-    cachedProducts = null; // Invalidate cache
+    cachedProducts = null; // Invalidate memory cache
+    try {
+      localStorage.removeItem('shoplix_cache_products'); // Invalidate local storage cache
+    } catch (e) {}
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${PRODUCTS_COLLECTION}/${id}`);
   }
@@ -330,7 +336,10 @@ export const deleteProduct = async (id: string) => {
   try {
     const docRef = doc(db, PRODUCTS_COLLECTION, id);
     await deleteDoc(docRef);
-    cachedProducts = null; // Invalidate cache
+    cachedProducts = null; // Invalidate memory cache
+    try {
+      localStorage.removeItem('shoplix_cache_products'); // Invalidate local storage cache
+    } catch (e) {}
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `${PRODUCTS_COLLECTION}/${id}`);
   }
@@ -1005,7 +1014,10 @@ export const addCategory = async (categoryData: any) => {
       ...categoryData,
       createdAt: serverTimestamp()
     });
-    cachedCategories = null; // Invalidate cache
+    cachedCategories = null; // Invalidate memory cache
+    try {
+      localStorage.removeItem('shoplix_cache_categories'); // Invalidate local storage cache
+    } catch (e) {}
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, CATEGORIES_COLLECTION);
@@ -1019,7 +1031,10 @@ export const updateCategory = async (id: string, categoryData: any) => {
       ...categoryData,
       updatedAt: serverTimestamp()
     });
-    cachedCategories = null; // Invalidate cache
+    cachedCategories = null; // Invalidate memory cache
+    try {
+      localStorage.removeItem('shoplix_cache_categories'); // Invalidate local storage cache
+    } catch (e) {}
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${CATEGORIES_COLLECTION}/${id}`);
   }
@@ -1029,7 +1044,10 @@ export const deleteCategory = async (id: string) => {
   try {
     const docRef = doc(db, CATEGORIES_COLLECTION, id);
     await deleteDoc(docRef);
-    cachedCategories = null; // Invalidate cache
+    cachedCategories = null; // Invalidate memory cache
+    try {
+      localStorage.removeItem('shoplix_cache_categories'); // Invalidate local storage cache
+    } catch (e) {}
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `${CATEGORIES_COLLECTION}/${id}`);
   }
@@ -1340,7 +1358,10 @@ export const updateHeroSettings = async (settingsData: any) => {
       ...settingsData,
       updatedAt: serverTimestamp()
     }, { merge: true });
-    cachedHeroSettings = null; // Invalidate cache
+    
+    // Update both memory cache and local storage cache immediately with the new data
+    cachedHeroSettings = settingsData;
+    saveToLocalCache('hero_settings', settingsData);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${SETTINGS_COLLECTION}/${HERO_DOCUMENT_ID}`);
   }
@@ -1404,7 +1425,10 @@ export const updateSocialSettings = async (settingsData: any) => {
       ...settingsData,
       updatedAt: serverTimestamp()
     }, { merge: true });
-    cachedSocialSettings = null; // Invalidate cache
+    
+    // Update both memory cache and local storage cache immediately with the new data
+    cachedSocialSettings = settingsData;
+    saveToLocalCache('social_settings', settingsData);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${SETTINGS_COLLECTION}/${SOCIAL_DOCUMENT_ID}`);
   }
@@ -1508,7 +1532,10 @@ export const updateShippingRate = async (rateData: any) => {
       ...rateData,
       updatedAt: serverTimestamp()
     }, { merge: true });
-    cachedShippingRates = null; // Invalidate cache
+    cachedShippingRates = null; // Invalidate memory cache
+    try {
+      localStorage.removeItem('shoplix_cache_shipping_rates'); // Invalidate local storage cache
+    } catch (e) {}
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${SHIPPING_RATES_COLLECTION}/${idStr}`);
   }
