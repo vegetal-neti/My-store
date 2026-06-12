@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { signInWithGoogle, logOut } from '../firebase';
+import { navigateDeviceAware } from '../lib/dynamicRouting';
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigate?: (view: 'home' | 'checkout' | 'success' | 'admin' | 'details' | 'thank-you' | 'products' | 'terms' | 'privacy') => void;
+  onContactUsOpen?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, onContactUsOpen }) => {
   const [showAccountOptions, setShowAccountOptions] = useState(false);
   const { currentUser, loading } = useAuth();
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -72,7 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate })
             onClick={() => setShowAccountOptions(!showAccountOptions)}
             className="py-4 text-[15px] font-medium text-brand-text border-b border-neutral-200/60 hover:text-neutral-500 transition-colors text-left"
           >
-            Account
+            Account / الحساب
           </button>
           
           {showAccountOptions && !loading && (
@@ -126,8 +128,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate })
             </div>
           )}
 
-          <a href="#" className="py-4 text-[15px] font-medium text-brand-text border-b border-neutral-200/60 hover:text-neutral-500 transition-colors">Language & Region</a>
-          <a href="#" className="py-4 text-[15px] font-medium text-brand-text border-b border-neutral-200/60 hover:text-neutral-500 transition-colors">Contact Us</a>
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              onClose();
+              onContactUsOpen?.();
+            }}
+            className="py-4 text-[15px] font-medium text-left text-brand-text border-b border-neutral-200/60 hover:text-neutral-500 transition-colors w-full cursor-pointer outline-none"
+          >
+            Contact us / اتصل بنا
+          </button>
         </div>
       </div>
     </>

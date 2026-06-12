@@ -15,6 +15,7 @@ const ShippingRatesModal = React.lazy(() => import('./components/ShippingRatesMo
 const FaqModal = React.lazy(() => import('./components/FaqModal').then(m => ({ default: m.FaqModal })));
 const TermsPage = React.lazy(() => import('./components/TermsPage').then(m => ({ default: m.TermsPage })));
 const PrivacyPage = React.lazy(() => import('./components/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
+const ContactUsModal = React.lazy(() => import('./components/ContactUsModal').then(m => ({ default: m.ContactUsModal })));
 
 const Header = ({ onMenuClick, onSearchClick }: { onMenuClick: () => void; onSearchClick: () => void }) => {
   return (
@@ -394,11 +395,13 @@ const BestSellers = ({
 const Footer = React.memo(({ 
   onNavigate, 
   onShippingRatesOpen,
-  onFaqOpen
+  onFaqOpen,
+  onContactUsOpen
 }: { 
   onNavigate: (view: 'home' | 'checkout' | 'success' | 'admin' | 'details' | 'thank-you' | 'products' | 'terms' | 'privacy') => void;
   onShippingRatesOpen: () => void;
   onFaqOpen: () => void;
+  onContactUsOpen: () => void;
 }) => {
   const [socials, setSocials] = React.useState<{
     whatsapp?: string;
@@ -524,6 +527,14 @@ const Footer = React.memo(({
             <ul className="flex flex-col gap-1.5">
               <li>
                 <button 
+                  onClick={(e) => { e.preventDefault(); onContactUsOpen(); }}
+                  className="text-[15px] text-neutral-400 hover:text-white transition-colors cursor-pointer text-right w-full font-sans"
+                >
+                  تواصل معنا
+                </button>
+              </li>
+              <li>
+                <button 
                   onClick={(e) => { e.preventDefault(); onShippingRatesOpen(); }}
                   onMouseEnter={() => handlePrefetch('shipping')}
                   onTouchStart={() => handlePrefetch('shipping')}
@@ -531,9 +542,6 @@ const Footer = React.memo(({
                 >
                   اسعار التوصيل
                 </button>
-              </li>
-              <li>
-                <a href="#" className="text-[15px] text-neutral-400 hover:text-white transition-colors">تتبع الطلب</a>
               </li>
               <li>
                 <button 
@@ -674,6 +682,7 @@ export default function App() {
   const [isShippingOpen, setIsShippingOpen] = React.useState(false);
   const [isFaqOpen, setIsFaqOpen] = React.useState(false);
   const [confirmedOrder, setConfirmedOrder] = React.useState<{ productName: string; totalPrice: number; phoneNumber: string } | null>(null);
+  const [isContactOpen, setIsContactOpen] = React.useState(false);
 
   // Synchronize state with URL on browser back/forward navigation
   React.useEffect(() => {
@@ -755,7 +764,12 @@ export default function App() {
   return (
     <AuthProvider>
       <div className="w-full min-h-screen flex flex-col font-sans selection:bg-brand-text selection:text-white">
-        <Sidebar isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} onNavigate={(v) => { setView(v); setIsMenuOpen(false); }} />
+        <Sidebar 
+          isOpen={isMenuOpen} 
+          onClose={() => setIsMenuOpen(false)} 
+          onNavigate={(v) => { setView(v); setIsMenuOpen(false); }} 
+          onContactUsOpen={() => setIsContactOpen(true)}
+        />
 
         {/* 
           Using a constraint wrapper specifically to mirror the mobile-first screenshot aesthetic 
@@ -806,6 +820,7 @@ export default function App() {
                   onNavigate={setView} 
                   onShippingRatesOpen={() => setIsShippingOpen(true)} 
                   onFaqOpen={() => setIsFaqOpen(true)} 
+                  onContactUsOpen={() => setIsContactOpen(true)}
                 />
               </>
             )}
@@ -887,6 +902,16 @@ export default function App() {
                 <FaqModal 
                   isOpen={isFaqOpen} 
                   onClose={() => setIsFaqOpen(false)} 
+                />
+              </React.Suspense>
+            )}
+
+            {/* Real Contact Us Modal Overlay */}
+            {isContactOpen && (
+              <React.Suspense fallback={null}>
+                <ContactUsModal 
+                  isOpen={isContactOpen} 
+                  onClose={() => setIsContactOpen(false)} 
                 />
               </React.Suspense>
             )}

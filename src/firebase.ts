@@ -869,6 +869,47 @@ export const getOrders = async () => {
   }
 };
 
+export const getOrderByNumberOrId = async (searchIdent: string) => {
+  try {
+    const cleanSearch = searchIdent.trim();
+    if (!cleanSearch) return null;
+    
+    // First, try querying by orderNumber field
+    const q1 = query(collection(db, ORDERS_COLLECTION), where('orderNumber', '==', cleanSearch));
+    const snapshot1 = await getDocs(q1);
+    if (!snapshot1.empty) {
+      const doc = snapshot1.docs[0];
+      return { id: doc.id, ...doc.data() };
+    }
+    
+    // Support without # prefix, e.g. "ORD-123" if they typed "ORD-123"
+    if (!cleanSearch.startsWith('#')) {
+      const q2 = query(collection(db, ORDERS_COLLECTION), where('orderNumber', '==', `#${cleanSearch}`));
+      const snapshot2 = await getDocs(q2);
+      if (!snapshot2.empty) {
+        const doc = snapshot2.docs[0];
+        return { id: doc.id, ...doc.data() };
+      }
+    }
+    
+    // Also try doc ID fallback
+    try {
+      const docRef = doc(db, ORDERS_COLLECTION, cleanSearch);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() };
+      }
+    } catch (e) {
+      // ignore check
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error fetching order by number/id:", error);
+    return null;
+  }
+};
+
 export const updateOrder = async (id: string, orderData: any) => {
   try {
     await runTransaction(db, async (transaction) => {
