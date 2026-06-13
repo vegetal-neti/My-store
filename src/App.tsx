@@ -380,7 +380,7 @@ const BestSellers = ({
     <section className="px-4 mb-16" id="best-sellers-section">
       <div className="mb-6 px-1">
         <div className="flex justify-between items-end">
-          <h2 className="font-serif italic text-4xl text-brand-text leading-tight">
+          <h2 className="font-serif italic text-[30px] text-brand-text leading-tight">
             Our Products
           </h2>
           <button 
