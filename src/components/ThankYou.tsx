@@ -24,43 +24,46 @@ export const ThankYou: React.FC<ThankYouProps> = ({ productName, totalPrice, pho
         </div>
 
         {/* Header Message */}
-        <h2 className="font-serif italic text-2xl text-brand-text tracking-tight mb-2">
-          Order Confirmed Successfully!
-        </h2>
-        <p className="text-[14px] text-neutral-500 leading-relaxed max-w-[280px] mx-auto mb-6">
-          لقد تم تأكيد طلبك بنجاح. سنقوم بالتواصل معك لتأكيد الشحن قريباً.
-          <br />
-          Thank you for shopping with us!
-        </p>
+        <div className="mb-6 space-y-1" dir="rtl">
+          <h2 className="font-amiri font-normal text-[28px] text-neutral-900 leading-snug">
+            لقد تم تأكيد طلبك بنجاح!
+          </h2>
+          <p className="font-amiri text-[15.5px] text-neutral-500 leading-relaxed max-w-[290px] mx-auto pt-1">
+            سنقوم بالتواصل معك لتأكيد الشحن قريباً
+          </p>
+          <p className="text-[10px] text-neutral-400 leading-relaxed pt-1.5 font-bold tracking-wider select-none uppercase font-sans" dir="ltr">
+            Thank you for shopping with us!
+          </p>
+        </div>
 
         {/* Order Details list */}
-        <div className="bg-neutral-50 rounded-2xl p-4.5 text-left space-y-3 border border-neutral-200/30 mb-8">
-          <h3 className="text-[11px] uppercase tracking-wider font-bold text-neutral-400 border-b border-neutral-200/50 pb-2">
-            Order Details / تفاصيل الطلب
+        <div className="bg-neutral-50 rounded-2xl p-4.5 space-y-3.5 border border-neutral-200/30 mb-8">
+          <h3 className="text-[13px] font-bold text-neutral-500 border-b border-neutral-200/50 pb-2 text-right font-sans" dir="rtl">
+            تفاصيل الطلب
           </h3>
 
-          <div className="flex justify-between text-[13px] text-neutral-700 leading-tight">
-            <span className="text-neutral-400">Product:</span>
-            <span className="font-medium truncate max-w-[180px]">{productName || 'Veg Garment'}</span>
+          <div className="flex justify-between items-center text-[13px] text-neutral-700 leading-tight" dir="rtl">
+            <span className="text-neutral-400 font-sans">المنتج:</span>
+            <span className="font-medium truncate max-w-[180px] font-sans text-left" dir="auto">{productName || 'Veg Garment'}</span>
           </div>
 
           {phone && (
-            <div className="flex justify-between text-[13px] text-neutral-700 leading-tight">
-              <span className="text-neutral-400">Phone:</span>
-              <span className="font-mono font-medium">{phone}</span>
+            <div className="flex justify-between items-center text-[13px] text-neutral-700 leading-tight" dir="rtl">
+              <span className="text-neutral-400 font-sans">رقم الهاتف:</span>
+              <span className="font-mono font-medium text-left" dir="ltr">{phone}</span>
             </div>
           )}
 
-          <div className="flex justify-between text-[13px] text-neutral-700 leading-tight">
-            <span className="text-neutral-400">Payment:</span>
-            <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded text-[11px]">
+          <div className="flex justify-between items-center text-[13px] text-neutral-700 leading-tight" dir="rtl">
+            <span className="text-neutral-400 font-sans">الدفع:</span>
+            <span className="font-bold text-emerald-850 bg-emerald-50 px-2 py-0.5 rounded text-[11.5px] font-sans text-left">
               الدفع عند الاستلام (COD)
             </span>
           </div>
 
-          <div className="flex justify-between text-[14px] text-brand-text font-bold border-t border-dashed border-neutral-200 pt-2.5 mt-1">
-            <span>Total Price / المجموع الإجمالي:</span>
-            <span className="font-serif inline-flex gap-1" dir="ltr">
+          <div className="flex justify-between items-center text-[14px] text-brand-text font-bold border-t border-dashed border-neutral-200 pt-2.5 mt-1" dir="rtl">
+            <span className="font-sans">السعر الإجمالي:</span>
+            <span className="font-serif inline-flex gap-1 text-left" dir="ltr">
               <span>دج</span>
               <span>{(totalPrice || 0).toFixed(0)}</span>
             </span>
@@ -70,10 +73,10 @@ export const ThankYou: React.FC<ThankYouProps> = ({ productName, totalPrice, pho
         {/* Continue Button */}
         <button
           onClick={onContinue}
-          className="w-full bg-brand-text text-white hover:bg-neutral-800 transition-colors py-4 px-6 rounded-full font-medium text-[14px] flex items-center justify-center gap-2 shadow-sm"
+          className="w-full bg-brand-text text-white hover:bg-neutral-800 transition-colors py-3.5 px-6 rounded-full flex items-center justify-center gap-2.5 shadow-sm"
         >
-          <ShoppingBag size={16} strokeWidth={1.5} />
-          <span>Continue Shopping / متابعة التسوق</span>
+          <ShoppingBag size={18} strokeWidth={1.5} className="shrink-0" />
+          <span className="font-sans font-bold text-[16px] tracking-wide">متابعة التسوق</span>
         </button>
       </motion.div>
     </div>

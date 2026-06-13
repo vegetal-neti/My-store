@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, Search, ArrowRight, Plus, Facebook, Instagram, MessageCircle, Send, Phone } from 'lucide-react';
+import { Menu, Search, ArrowRight, ArrowLeft, Plus, Facebook, Instagram, MessageCircle, Send, Phone } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { AuthProvider } from './context/AuthContext';
 import { Product } from './types';
@@ -127,10 +127,15 @@ const Hero = ({ onCtaClick }: { onCtaClick: (categoryId: string) => void }) => {
   const imageUrl = settings?.imageUrl;
   const ctaLinkValue = settings?.ctaLink || 'all';
 
+  const isBadgeArabic = /[\u0600-\u06FF]/.test(badgeText || '');
+  const isTitleArabic = /[\u0600-\u06FF]/.test(titleText || '');
+  const isDescArabic = /[\u0600-\u06FF]/.test(descriptionText || '');
+  const isCtaArabic = /[\u0600-\u06FF]/.test(buttonText || '');
+
   if (loading) {
     return (
       <section className="px-4 mb-10 mt-3">
-        <div className="bg-brand-hero/10 h-[480px] rounded-3xl flex items-center justify-center animate-pulse border border-neutral-100">
+        <div className="bg-brand-hero/10 h-[441.6px] rounded-3xl flex items-center justify-center animate-pulse border border-neutral-100">
           <div className="w-8 h-8 border-2 border-brand-text border-t-transparent rounded-full animate-spin"></div>
         </div>
       </section>
@@ -140,7 +145,7 @@ const Hero = ({ onCtaClick }: { onCtaClick: (categoryId: string) => void }) => {
   return (
     <section className="px-4 mb-10 mt-3">
       <div 
-        className="h-[480px] rounded-[2rem] p-7 flex flex-col justify-end relative overflow-hidden transition-all duration-500 hover:shadow-md"
+        className="h-[441.6px] rounded-[2rem] p-7 flex flex-col justify-end relative overflow-hidden transition-all duration-500 hover:shadow-md"
         style={{
           backgroundColor: imageUrl ? 'transparent' : 'var(--color-brand-hero)'
         }}
@@ -162,26 +167,50 @@ const Hero = ({ onCtaClick }: { onCtaClick: (categoryId: string) => void }) => {
           <div className="absolute inset-0 bg-neutral-950/25 z-10" />
         )}
 
-        <div className="relative z-20 flex flex-col items-start max-w-full">
+        <div 
+          className="relative z-20 flex flex-col max-w-full w-full gap-1"
+        >
           {badgeText && (
-            <p className="text-[10px] tracking-[0.22em] font-semibold text-white/95 mb-3 uppercase drop-shadow-sm">
+            <p 
+              className={`text-[10px] tracking-[0.22em] font-semibold text-white/95 mb-3 uppercase drop-shadow-sm w-full ${
+                isBadgeArabic ? 'text-right' : 'text-left'
+              }`}
+              dir={isBadgeArabic ? 'rtl' : 'ltr'}
+            >
               {badgeText}
             </p>
           )}
-          <h2 className="font-serif italic text-[2.5rem] md:text-[2.75rem] leading-[1.1] text-white mb-4 drop-shadow-sm max-w-md">
+          <h2 
+            className={`font-serif italic text-[2.5rem] md:text-[2.75rem] leading-[1.1] text-white mb-4 drop-shadow-sm max-w-md w-full ${
+              isTitleArabic ? 'self-end text-right' : 'self-start text-left'
+            }`}
+            dir={isTitleArabic ? 'rtl' : 'ltr'}
+          >
             {titleText}
           </h2>
           {descriptionText && (
-            <p className="text-[13px] text-white/90 mb-6 leading-relaxed max-w-[280px] drop-shadow-sm">
+            <p 
+              className={`text-[13px] text-white/90 mb-6 leading-relaxed max-w-[280px] drop-shadow-sm w-full ${
+                isDescArabic ? 'self-end text-right' : 'self-start text-left'
+              }`}
+              dir={isDescArabic ? 'rtl' : 'ltr'}
+            >
               {descriptionText}
             </p>
           )}
           <button 
             onClick={() => onCtaClick(ctaLinkValue)}
-            className="bg-white/95 hover:bg-white active:scale-95 transition-all text-brand-text rounded-full py-3.5 px-6 flex items-center justify-between w-[220px] shadow-sm group cursor-pointer"
+            className={`bg-white/95 hover:bg-white active:scale-95 transition-all text-brand-text rounded-full py-3.5 px-6 flex items-center justify-center gap-3.5 w-fit shadow-sm group cursor-pointer ${
+              isCtaArabic ? 'self-end' : 'self-start'
+            }`}
+            dir={isCtaArabic ? 'rtl' : 'ltr'}
           >
             <span className="text-sm font-semibold tracking-wide">{buttonText}</span>
-            <ArrowRight size={18} strokeWidth={1.5} className="group-hover:translate-x-1 transition-transform" />
+            {isCtaArabic ? (
+              <ArrowLeft size={18} strokeWidth={1.5} className="group-hover:-translate-x-1 transition-transform shrink-0" />
+            ) : (
+              <ArrowRight size={18} strokeWidth={1.5} className="group-hover:translate-x-1 transition-transform shrink-0" />
+            )}
           </button>
         </div>
       </div>
