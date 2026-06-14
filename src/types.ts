@@ -114,6 +114,12 @@ export interface Order {
   savedAmount?: number;
   savedPercentage?: number;
   flashOfferId?: string;
+  assignedBotId?: string;
+  assignedBot?: {
+    id: string;
+    botToken: string;
+    chatId: string;
+  };
 }
 
 

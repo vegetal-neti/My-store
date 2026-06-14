@@ -407,9 +407,22 @@ export const sendTelegramNotificationIfNeeded = async (orderId: string, orderDat
     let chatId = '';
 
     if (orderData && orderData.assignedBot && orderData.assignedBot.botToken && orderData.assignedBot.chatId) {
+      // 1. Backward Compatibility: Old orders containing full bot details directly
       botToken = orderData.assignedBot.botToken;
       chatId = orderData.assignedBot.chatId;
+    } else if (orderData && orderData.assignedBotId) {
+      // 2. New refactored design: Find by assignedBotId in settings' bots array
+      const matchedBot = (settings.bots || []).find((b: any) => b.id === orderData.assignedBotId);
+      if (matchedBot && matchedBot.botToken && matchedBot.chatId) {
+        botToken = matchedBot.botToken;
+        chatId = matchedBot.chatId;
+      } else {
+        // Fallback to primary settings credentials if bot not found or has been deleted
+        botToken = settings.botToken;
+        chatId = settings.chatId;
+      }
     } else {
+      // 3. Fallback or legacy order without specific assigned bot
       botToken = settings.botToken;
       chatId = settings.chatId;
     }
@@ -832,7 +845,7 @@ export const createOrder = async (orderData: any) => {
       const orderRef = doc(collection(db, ORDERS_COLLECTION));
       const status = orderData.status || 'pending';
 
-      let assignedBot = null;
+      let assignedBotId = '';
       let nextBotIndex = 0;
       let hasMultipleBots = false;
 
@@ -845,17 +858,9 @@ export const createOrder = async (orderData: any) => {
             const lastIndex = typeof settingsData.lastUsedBotIndex === 'number' ? settingsData.lastUsedBotIndex : -1;
             nextBotIndex = (lastIndex + 1) % bots.length;
             const selectedBot = bots[nextBotIndex];
-            assignedBot = {
-              botToken: selectedBot.botToken,
-              chatId: selectedBot.chatId,
-              id: selectedBot.id
-            };
+            assignedBotId = selectedBot.id;
           } else if (settingsData.botToken && settingsData.chatId) {
-            assignedBot = {
-              botToken: settingsData.botToken,
-              chatId: settingsData.chatId,
-              id: 'primary'
-            };
+            assignedBotId = 'primary';
           }
         }
       }
@@ -866,7 +871,7 @@ export const createOrder = async (orderData: any) => {
         orderNumber,
         analyticsAppliedStatus: status, // Set actual applied state directly to prevent double computing
         createdAt: serverTimestamp(),
-        ...(assignedBot ? { assignedBot } : {})
+        ...(assignedBotId ? { assignedBotId } : {})
       };
 
       // Initialize analytics in-memory
