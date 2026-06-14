@@ -3,9 +3,10 @@ import { AdminHeroSettings } from './HeroSettings';
 import { AdminTelegramSettings } from './TelegramSettings';
 import { AdminShippingRatesSettings } from './ShippingRatesSettings';
 import { AdminSocialSettings } from './SocialSettings';
-import { Image, ChevronDown, ChevronLeft, Send, Truck, Share2 } from 'lucide-react';
+import { AdminDeliveryProvidersSettings } from './DeliveryProvidersSettings';
+import { Image, ChevronDown, ChevronLeft, Send, Truck, Share2, MapPin } from 'lucide-react';
 
-type SectionType = 'hero' | 'telegram' | 'shipping' | 'social' | null;
+type SectionType = 'hero' | 'telegram' | 'shipping' | 'social' | 'delivery' | null;
 
 export const AdminSettings = () => {
   const [expandedSection, setExpandedSection] = useState<SectionType>(null);
@@ -86,6 +87,40 @@ export const AdminSettings = () => {
           {expandedSection === 'shipping' && (
             <div className="border-t border-neutral-150 p-6 bg-neutral-50/30 animate-fade-in">
               <AdminShippingRatesSettings />
+            </div>
+          )}
+        </div>
+
+        {/* SECTION: DELIVERY PROVIDERS settings */}
+        <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden transition-all duration-300">
+          <button
+            type="button"
+            onClick={() => toggleSection('delivery')}
+            className="w-full flex items-center justify-between p-5 hover:bg-neutral-50/50 transition-colors text-right outline-none cursor-pointer"
+          >
+            <div className="flex items-center gap-4">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                expandedSection === 'delivery' ? 'bg-brand-text text-white' : 'bg-neutral-100 text-neutral-500'
+              }`}>
+                <MapPin size={18} />
+              </div>
+              <div>
+                <h3 className="text-[15px] font-semibold text-brand-text">شركات التوصيل ومكاتب الاستلام (Delivery Providers)</h3>
+                <p className="text-[12px] text-neutral-400 mt-0.5">تحديد شركات التوصيل النشطة وتخصيص غطاء بلديات الاستلام من المكتب الكلي.</p>
+              </div>
+            </div>
+            <div className="text-neutral-400">
+              {expandedSection === 'delivery' ? (
+                <ChevronDown size={20} className="transform rotate-180 transition-transform duration-200" />
+              ) : (
+                <ChevronLeft size={20} className="transition-transform duration-200" />
+              )}
+            </div>
+          </button>
+
+          {expandedSection === 'delivery' && (
+            <div className="border-t border-neutral-150 p-6 bg-neutral-50/30 animate-fade-in">
+              <AdminDeliveryProvidersSettings />
             </div>
           )}
         </div>

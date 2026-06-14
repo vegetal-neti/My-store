@@ -1652,4 +1652,73 @@ export const updateShippingRate = async (rateData: any) => {
   }
 };
 
+// ==========================================
+// Delivery Providers API
+// ==========================================
+const DELIVERY_PROVIDERS_DOCUMENT_ID = 'delivery_providers';
+let cachedDeliverySettings: any = null;
+
+export const getDeliveryProvidersSettings = async (forceFresh = false) => {
+  try {
+    if (cachedDeliverySettings && !forceFresh) {
+      return cachedDeliverySettings;
+    }
+    
+    const cached = getFromLocalCache<any>('delivery_providers_settings');
+    if (cached && !forceFresh) {
+      cachedDeliverySettings = cached.data;
+      const TTL = 900000; // 15 mins
+      if (Date.now() - cached.timestamp < TTL) {
+        return cached.data;
+      }
+      
+      // Expired: Background update
+      (async () => {
+        try {
+          const docRef = doc(db, SETTINGS_COLLECTION, DELIVERY_PROVIDERS_DOCUMENT_ID);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            const data = snap.data();
+            cachedDeliverySettings = data;
+            saveToLocalCache('delivery_providers_settings', data);
+          }
+        } catch (err) {
+          console.warn("Background delivery providers settings refresh failed:", err);
+        }
+      })();
+      
+      return cached.data;
+    }
+    
+    const docRef = doc(db, SETTINGS_COLLECTION, DELIVERY_PROVIDERS_DOCUMENT_ID);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      cachedDeliverySettings = data;
+      saveToLocalCache('delivery_providers_settings', data);
+      return data;
+    }
+    return null;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `${SETTINGS_COLLECTION}/${DELIVERY_PROVIDERS_DOCUMENT_ID}`);
+  }
+};
+
+export const updateDeliveryProvidersSettings = async (settingsData: any) => {
+  try {
+    const docRef = doc(db, SETTINGS_COLLECTION, DELIVERY_PROVIDERS_DOCUMENT_ID);
+    await setDoc(docRef, {
+      ...settingsData,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    
+    // Update local cache
+    cachedDeliverySettings = settingsData;
+    saveToLocalCache('delivery_providers_settings', settingsData);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `${SETTINGS_COLLECTION}/${DELIVERY_PROVIDERS_DOCUMENT_ID}`);
+  }
+};
+
+
 

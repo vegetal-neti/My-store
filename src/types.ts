@@ -122,4 +122,15 @@ export interface Order {
   };
 }
 
+export interface DeliveryProvider {
+  id: string;
+  name: string;
+  supportedCommunes: Record<string, string[]>; // key: wilayaId, value: list of commune names as strings
+  active: boolean;
+}
+
+export interface DeliveryProvidersSettings {
+  providers: DeliveryProvider[];
+}
+
 

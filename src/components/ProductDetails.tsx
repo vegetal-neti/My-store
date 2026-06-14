@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Check, Loader2, Package } from 'lucide-react';
-import { getProductById, createOrder, getShippingRates } from '../firebase';
+import { getProductById, createOrder, getShippingRates, getDeliveryProvidersSettings } from '../firebase';
 import { Product } from '../types';
 import { algeriaWilayas } from '../data/algeriaCities';
 
@@ -166,6 +166,108 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
   const [city, setCity] = useState('');
   const [deliveryType, setDeliveryType] = useState<'home' | 'pickup'>('home');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Dynamic loaded communes
+  const [loadedCommunes, setLoadedCommunes] = useState<Record<number, string[]> | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadCommunes = async () => {
+      try {
+        const { algeriaCommunes } = await import('../data/algeriaCommunes');
+        if (active) {
+          setLoadedCommunes(algeriaCommunes);
+        }
+      } catch (err) {
+        console.error("Failed to dynamically load communes", err);
+      }
+    };
+    loadCommunes();
+    return () => { active = false; };
+  }, []);
+
+  // Active delivery provider (for "Office Pickup" / "استلام من المكتب")
+  const [activeProvider, setActiveProvider] = useState<any | null>(null);
+  const [deliverySettingsLoaded, setDeliverySettingsLoaded] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const loadDeliverySettings = async () => {
+      try {
+        const settings = await getDeliveryProvidersSettings();
+        if (active && settings && Array.isArray(settings.providers)) {
+          const activeProv = settings.providers.find((p: any) => p.active);
+          setActiveProvider(activeProv || null);
+        }
+        if (active) {
+          setDeliverySettingsLoaded(true);
+        }
+      } catch (err) {
+        console.error("Failed to fetch active provider settings:", err);
+        if (active) {
+          setDeliverySettingsLoaded(true);
+        }
+      }
+    };
+    loadDeliverySettings();
+    return () => { active = false; };
+  }, []);
+
+  // Helper: Derive available communes based on chosen method type
+  const getAvailableCommunes = () => {
+    if (!selectedWilayaObj) return [];
+
+    const baseCommunes = loadedCommunes
+      ? (loadedCommunes[selectedWilayaObj.id] || [])
+      : (selectedWilayaObj.communes || []);
+
+    if (deliveryType === 'home') {
+      return baseCommunes;
+    }
+
+    if (!activeProvider) {
+      return [];
+    }
+
+    const providerSupported = activeProvider.supportedCommunes[String(selectedWilayaObj.id)] || activeProvider.supportedCommunes[selectedWilayaObj.id] || [];
+    return baseCommunes.filter(c => providerSupported.includes(c));
+  };
+
+  // Helper: Check if Office Pickup is available for chosen Wilaya
+  const isOfficePickupAvailableForWilaya = (wilayaObj = selectedWilayaObj) => {
+    if (!activeProvider) return false;
+    if (!wilayaObj) return true;
+    const list = activeProvider.supportedCommunes[String(wilayaObj.id)] || activeProvider.supportedCommunes[wilayaObj.id];
+    return Array.isArray(list) && list.length > 0;
+  };
+
+  // Helper: Check if Office Pickup is globally covered by an active provider
+  const isOfficePickupGloballyAvailable = () => {
+    if (!deliverySettingsLoaded) return true;
+    return !!activeProvider;
+  };
+
+  // Safe handler to change delivery type, with strict municipality rules
+  const handleSelectDeliveryType = (type: 'home' | 'pickup') => {
+    if (type === 'pickup') {
+      if (!activeProvider) {
+        setDeliveryType('pickup');
+        setCity('');
+        return;
+      }
+
+      if (selectedWilayaObj) {
+        if (city) {
+          const supported = activeProvider.supportedCommunes[String(selectedWilayaObj.id)] || activeProvider.supportedCommunes[selectedWilayaObj.id] || [];
+          if (!supported.includes(city)) {
+            setCity('');
+          }
+        }
+      }
+    }
+
+    setDeliveryType(type);
+  };
   
   // Gallery active image
   const [activeImage, setActiveImage] = useState<string>('');
@@ -450,9 +552,10 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
     setCity('');
     if (!val.trim()) {
       setValidationErrors(prev => ({ ...prev, state: "مطلوب" }));
-    } else {
-      setValidationErrors(prev => ({ ...prev, state: undefined }));
+      return;
     }
+
+    setValidationErrors(prev => ({ ...prev, state: undefined }));
   };
 
   const handleStateBlur = () => {
@@ -535,6 +638,15 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
     // 4. City check
     if (!city.trim()) {
       errors.city = "مطلوب";
+    } else if (selectedWilayaObj) {
+      const allowedCommunes = getAvailableCommunes();
+      if (allowedCommunes.length > 0 && !allowedCommunes.includes(city.trim())) {
+        if (deliveryType === 'pickup' && activeProvider) {
+          errors.city = `البلدية المحددة غير مدعومة للاستلام من المكتب لدى ${activeProvider.name}`;
+        } else {
+          errors.city = "البلدية المختارة لا تنتمي لولاية " + selectedWilayaObj.name;
+        }
+      }
     }
 
     // 5. Cooldown check
@@ -1174,43 +1286,53 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                   </svg>
                   <span>البلدية / City</span>
                 </label>
-                <div className="relative">
-                  <select
-                    required
-                    disabled={!state || !isWilayaEnabled}
-                    value={city}
-                    onChange={(e) => handleCityChange(e.target.value)}
-                    onBlur={handleCityBlur}
-                    className={`w-full bg-white border rounded-xl pl-10 pr-4 py-3 text-[14px] text-right outline-none focus:border-brand-text transition-colors font-sans appearance-none ${
-                      !state || !isWilayaEnabled ? 'opacity-60 cursor-not-allowed bg-neutral-100' : 'cursor-pointer'
-                    } ${
-                      validationErrors.city ? 'border-red-400 focus:border-red-400' : 'border-neutral-200'
-                    }`}
-                    dir="rtl"
-                  >
-                    <option value="" disabled>
-                      {!state ? 'الرجاء اختيار الولاية أولاً' : !isWilayaEnabled ? 'التوصيل غير متاح' : '-- اختر البلدية / Select City --'}
-                    </option>
-                    {selectedWilayaObj?.communes.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-neutral-500">
-                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                    </svg>
+                {deliveryType === 'pickup' && state && isWilayaEnabled && getAvailableCommunes().length === 0 ? (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-850 text-[13px] rounded-xl p-3.5 text-right font-medium leading-relaxed animate-fade-in" dir="rtl">
+                    عذراً، الاستلام من المكتب غير متوفر في هذه الولاية. جرّب التوصيل إلى المنزل
                   </div>
-                </div>
-                {validationErrors.city && (
+                ) : (
+                  <div className="relative">
+                    <select
+                      required
+                      disabled={!state || !isWilayaEnabled}
+                      value={city}
+                      onChange={(e) => handleCityChange(e.target.value)}
+                      onBlur={handleCityBlur}
+                      className={`w-full bg-white border rounded-xl pl-10 pr-4 py-3 text-[14px] text-right outline-none focus:border-brand-text transition-colors font-sans appearance-none ${
+                        !state || !isWilayaEnabled ? 'opacity-60 cursor-not-allowed bg-neutral-100' : 'cursor-pointer'
+                      } ${
+                        validationErrors.city ? 'border-red-400 focus:border-red-400' : 'border-neutral-200'
+                      }`}
+                      dir="rtl"
+                    >
+                      <option value="" disabled>
+                        {!state 
+                          ? 'الرجاء اختيار الولاية أولاً' 
+                          : !isWilayaEnabled 
+                            ? 'التوصيل غير متاح' 
+                            : '-- اختر البلدية / Select City --'}
+                      </option>
+                      {getAvailableCommunes().map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-neutral-500">
+                      <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+                {validationErrors.city && !(deliveryType === 'pickup' && state && isWilayaEnabled && getAvailableCommunes().length === 0) && (
                   <p className="text-red-500 text-[11px] text-right mt-1 font-medium select-none" dir="rtl">
                     {validationErrors.city}
                   </p>
                 )}
               </div>
 
-              {/* Delivery Type Options */}
+               {/* Delivery Type Options */}
               <div>
                 <label className="flex items-center gap-1.5 justify-start text-[12px] text-neutral-500 mb-2 font-medium" dir="rtl">
                   <svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1224,7 +1346,7 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setDeliveryType('home')}
+                    onClick={() => handleSelectDeliveryType('home')}
                     className={`p-3.5 border text-center rounded-2xl flex flex-col items-center justify-center gap-1 transition-all ${
                       deliveryType === 'home'
                         ? 'border-brand-text bg-white shadow-sm font-semibold text-brand-text'
@@ -1236,14 +1358,20 @@ export const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, onBac
 
                   <button
                     type="button"
-                    onClick={() => setDeliveryType('pickup')}
-                    className={`p-3.5 border text-center rounded-2xl flex flex-col items-center justify-center gap-1 transition-all ${
-                      deliveryType === 'pickup'
-                        ? 'border-brand-text bg-white shadow-sm font-semibold text-brand-text'
-                        : 'border-neutral-200 bg-neutral-50 text-neutral-500 hover:bg-neutral-100'
+                    disabled={!isOfficePickupGloballyAvailable()}
+                    onClick={() => handleSelectDeliveryType('pickup')}
+                    className={`p-3.5 border text-center rounded-2xl flex flex-col items-center justify-center gap-1 transition-all relative ${
+                      !isOfficePickupGloballyAvailable()
+                        ? 'opacity-50 cursor-not-allowed bg-neutral-100 border-neutral-200 text-neutral-400'
+                        : deliveryType === 'pickup'
+                          ? 'border-brand-text bg-white shadow-sm font-semibold text-brand-text'
+                          : 'border-neutral-200 bg-neutral-50 text-neutral-500 hover:bg-neutral-100'
                     }`}
                   >
                     <span className="text-[13px] leading-none font-medium">استلام من المكتب</span>
+                    {!isOfficePickupGloballyAvailable() && deliverySettingsLoaded && (
+                      <span className="text-[9px] text-red-500 font-bold leading-none mt-1">غير متاح حالياً</span>
+                    )}
                   </button>
                 </div>
               </div>
