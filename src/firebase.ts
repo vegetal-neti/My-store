@@ -399,7 +399,22 @@ export const sendTelegramMessage = async (botToken: string, chatId: string, text
 export const sendTelegramNotificationIfNeeded = async (orderId: string, orderData: any) => {
   try {
     const settings = await getTelegramSettings();
-    if (!settings || !settings.enabled || !settings.botToken || !settings.chatId) {
+    if (!settings || !settings.enabled) {
+      return;
+    }
+
+    let botToken = '';
+    let chatId = '';
+
+    if (orderData && orderData.assignedBot && orderData.assignedBot.botToken && orderData.assignedBot.chatId) {
+      botToken = orderData.assignedBot.botToken;
+      chatId = orderData.assignedBot.chatId;
+    } else {
+      botToken = settings.botToken;
+      chatId = settings.chatId;
+    }
+
+    if (!botToken || !chatId) {
       return;
     }
 
@@ -440,17 +455,31 @@ export const sendTelegramNotificationIfNeeded = async (orderId: string, orderDat
     const dateStr = new Date().toLocaleString('ar-DZ', { timeZone: 'Africa/Algiers' });
     const orderNumValue = orderData.orderNumber || orderId;
 
+    const deliveryType = orderData.deliveryType;
+    let deliveryTypeText = '';
+    if (deliveryType) {
+      const dtLower = String(deliveryType).toLowerCase();
+      if (dtLower.includes('home')) {
+        deliveryTypeText = 'توصيل للمنزل';
+      } else if (dtLower.includes('pickup') || dtLower.includes('desk') || dtLower.includes('office')) {
+        deliveryTypeText = 'توصيل للمكتب / نقطة استلام';
+      } else {
+        deliveryTypeText = deliveryType;
+      }
+    }
+
     const messageText = `🔹 <b>طلب جديد من المتجر!</b> 🔹\n\n` +
       `📦 <b>رقم الطلب:</b> <code>${orderNumValue}</code>\n` +
       `👤 <b>اسم العميل:</b> ${fullName}\n` +
       `📞 <b>الهاتف:</b> ${phone}\n` +
       `📍 <b>الولاية:</b> ${state}\n` +
       (city ? `🏙️ <b>البلدية:</b> ${city}\n` : '') +
+      (deliveryTypeText ? `🚚 <b>نوع التوصيل:</b> ${deliveryTypeText}\n` : '') +
       `\n🛍️ <b>المنتجات المطلوبة:</b>\n${productsText}\n\n` +
       `💰 <b>الإجمالي:</b> <b>${total} دج</b>\n` +
       `⏰ <b>وقت الطلب:</b> ${dateStr}`;
 
-    await sendTelegramMessage(settings.botToken, settings.chatId, messageText);
+    await sendTelegramMessage(botToken, chatId, messageText);
   } catch (err) {
     console.error('Failed to send Telegram notification:', err);
   }
@@ -784,10 +813,12 @@ export const createOrder = async (orderData: any) => {
     const result = await runTransaction(db, async (transaction) => {
       const counterRef = doc(db, 'settings', 'counters');
       const analyticsRef = doc(db, 'analytics', 'dashboard');
+      const settingsRef = doc(db, 'settings', 'telegram');
       
       // 1. Perform ALL reads first!
       const counterSnap = await transaction.get(counterRef);
       const analyticsSnap = await transaction.get(analyticsRef);
+      const settingsSnap = await transaction.get(settingsRef);
       
       let nextNum = 1001;
       if (counterSnap.exists()) {
@@ -801,12 +832,41 @@ export const createOrder = async (orderData: any) => {
       const orderRef = doc(collection(db, ORDERS_COLLECTION));
       const status = orderData.status || 'pending';
 
+      let assignedBot = null;
+      let nextBotIndex = 0;
+      let hasMultipleBots = false;
+
+      if (settingsSnap.exists()) {
+        const settingsData = settingsSnap.data();
+        if (settingsData && settingsData.enabled) {
+          const bots = settingsData.bots || [];
+          if (bots.length > 0) {
+            hasMultipleBots = true;
+            const lastIndex = typeof settingsData.lastUsedBotIndex === 'number' ? settingsData.lastUsedBotIndex : -1;
+            nextBotIndex = (lastIndex + 1) % bots.length;
+            const selectedBot = bots[nextBotIndex];
+            assignedBot = {
+              botToken: selectedBot.botToken,
+              chatId: selectedBot.chatId,
+              id: selectedBot.id
+            };
+          } else if (settingsData.botToken && settingsData.chatId) {
+            assignedBot = {
+              botToken: settingsData.botToken,
+              chatId: settingsData.chatId,
+              id: 'primary'
+            };
+          }
+        }
+      }
+
       const enrichedOrderData = {
         ...orderData,
         status,
         orderNumber,
         analyticsAppliedStatus: status, // Set actual applied state directly to prevent double computing
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        ...(assignedBot ? { assignedBot } : {})
       };
 
       // Initialize analytics in-memory
@@ -842,6 +902,11 @@ export const createOrder = async (orderData: any) => {
       transaction.set(orderRef, enrichedOrderData);
       transaction.set(counterRef, { lastOrderNumber: nextNum }, { merge: true });
       transaction.set(analyticsRef, analytics);
+      if (hasMultipleBots) {
+        transaction.update(settingsRef, {
+          lastUsedBotIndex: nextBotIndex
+        });
+      }
       
       return { id: orderRef.id, orderNumber, enrichedOrderData };
     });

@@ -71,8 +71,8 @@ Phone: ${phone.trim() || 'Not provided'}
 Message: ${message.trim()}
 Type: Contact Us`;
 
-      if (settings && settings.botToken && settings.chatId) {
-        const isSent = await sendTelegramMessage(settings.botToken, settings.chatId, messageText);
+      if (settings && settings.contactEnabled && settings.contactBotToken && settings.contactChatId) {
+        const isSent = await sendTelegramMessage(settings.contactBotToken, settings.contactChatId, messageText);
         if (isSent) {
           setSuccess(true);
         } else {
@@ -82,7 +82,7 @@ Type: Contact Us`;
         }
       } else {
         // If bot properties are missing from admin setup, log warning and let client receive success state gracefully without hard-failing
-        console.warn("Telegram configurations are missing or disabled under admin. Simulating success fallback.");
+        console.warn("Telegram configurations are missing or disabled under admin for Contact. Simulating success fallback.");
         setSuccess(true);
       }
     } catch (err) {

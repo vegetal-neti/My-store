@@ -49,10 +49,21 @@ export interface HeroSettings {
   ctaLink?: string;
 }
 
+export interface TelegramBot {
+  id: string;
+  botToken: string;
+  chatId: string;
+}
+
 export interface TelegramSettings {
   botToken: string;
   chatId: string;
   enabled: boolean;
+  contactBotToken?: string;
+  contactChatId?: string;
+  contactEnabled?: boolean;
+  bots?: TelegramBot[];
+  lastUsedBotIndex?: number;
 }
 
 export interface SocialSettings {
