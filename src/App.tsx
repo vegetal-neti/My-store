@@ -40,23 +40,38 @@ const Navigation = ({
   selectedCategoryId: string; 
   onSelectCategory: (id: string) => void; 
 }) => {
-  const [categories, setCategories] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const [categories, setCategories] = React.useState<any[]>(() => {
+    try {
+      const cached = localStorage.getItem('shoplix_cache_categories');
+      if (cached) {
+        return JSON.parse(cached).data || [];
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [loading, setLoading] = React.useState(categories.length === 0);
 
   React.useEffect(() => {
+    let active = true;
     const fetchCats = async () => {
       try {
         const { getCategories } = await import('./firebase');
-        const list = await getCategories();
-        setCategories(list || []);
+        const hasCache = categories.length > 0;
+        const list = await getCategories(hasCache);
+        if (active && list) {
+          setCategories(list);
+        }
       } catch (err) {
         console.error("Error loading categories", err);
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
     fetchCats();
-  }, []);
+    return () => { active = false; };
+  }, [categories.length]);
 
   if (loading) {
     return (
@@ -96,15 +111,24 @@ const Navigation = ({
 };
 
 const Hero = ({ onCtaClick }: { onCtaClick: (categoryId: string) => void }) => {
-  const [settings, setSettings] = React.useState<any>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [settings, setSettings] = React.useState<any>(() => {
+    try {
+      const cached = localStorage.getItem('shoplix_cache_hero_settings');
+      if (cached) {
+        return JSON.parse(cached).data || null;
+      }
+    } catch (e) {}
+    return null;
+  });
+  const [loading, setLoading] = React.useState(!settings);
 
   React.useEffect(() => {
     let active = true;
     const fetchHero = async () => {
       try {
         const { getHeroSettings } = await import('./firebase');
-        const data = await getHeroSettings();
+        const hasCache = !!settings;
+        const data = await getHeroSettings(hasCache);
         if (active && data) {
           setSettings(data);
         }
@@ -118,7 +142,7 @@ const Hero = ({ onCtaClick }: { onCtaClick: (categoryId: string) => void }) => {
     };
     fetchHero();
     return () => { active = false; };
-  }, []);
+  }, [!!settings]);
 
   const badgeText = settings?.badge || 'Spring / Summer 26';
   const titleText = settings?.title || 'The Linen Collection';
@@ -337,10 +361,22 @@ const BestSellers = ({
   onProductSelect: (id: string) => void; 
   onViewAll: () => void;
 }) => {
-  const [products, setProducts] = React.useState<Product[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
   const [limitNum, setLimitNum] = React.useState(typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 16);
+  const [products, setProducts] = React.useState<Product[]>(() => {
+    try {
+      const cached = localStorage.getItem('shoplix_cache_products');
+      if (cached) {
+        const list = JSON.parse(cached).data || [];
+        if (selectedCategoryId === 'all') {
+          return list.slice(0, typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 16);
+        }
+        return list.filter((p: any) => p.categoryId === selectedCategoryId).slice(0, typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 16);
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [loading, setLoading] = React.useState(products.length === 0);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -356,24 +392,31 @@ const BestSellers = ({
   }, [limitNum]);
 
   React.useEffect(() => {
+    let active = true;
     const fetchProducts = async () => {
-      setLoading(true);
+      const hasCache = products.length > 0;
+      if (!hasCache) {
+        setLoading(true);
+      }
       try {
         const { getProductsWithLimit } = await import('./firebase');
-        const fetchedProducts = await getProductsWithLimit(limitNum, selectedCategoryId);
-        if (fetchedProducts) {
+        const fetchedProducts = await getProductsWithLimit(limitNum, selectedCategoryId, hasCache);
+        if (active && fetchedProducts) {
           setProducts(fetchedProducts as Product[]);
-        } else {
-          setProducts([]);
         }
       } catch (err: any) {
         console.error("Firebase connection error.", err);
-        setError("Database connection error. Please search or check backend settings.");
+        if (products.length === 0) {
+          setError("Database connection error. Please search or check backend settings.");
+        }
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
     fetchProducts();
+    return () => { active = false; };
   }, [selectedCategoryId, limitNum]);
 
   return (
@@ -437,7 +480,15 @@ const Footer = React.memo(({
     instagram?: string;
     facebook?: string;
     telegram?: string;
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const cached = localStorage.getItem('shoplix_cache_social_settings');
+      if (cached) {
+        return JSON.parse(cached).data || null;
+      }
+    } catch (e) {}
+    return null;
+  });
 
   const footerRef = React.useRef<HTMLDivElement>(null);
 
@@ -474,7 +525,8 @@ const Footer = React.memo(({
     let active = true;
     const loadSocialSettings = async () => {
       try {
-        const data = await getSocialSettings();
+        const hasCache = !!socials;
+        const data = await getSocialSettings(hasCache);
         if (active && data) {
           setSocials(data);
         }
@@ -484,7 +536,7 @@ const Footer = React.memo(({
     };
     loadSocialSettings();
     return () => { active = false; };
-  }, []);
+  }, [!!socials]);
 
   const formatSocialUrl = (type: string, value: string) => {
     if (!value) return '';
@@ -775,7 +827,9 @@ export default function App() {
 
   // Pre-load / warm up firebase cache in background to guarantee instant route transitions
   React.useEffect(() => {
-    const warmupCache = async () => {
+    let active = true;
+    const timer = setTimeout(async () => {
+      if (!active) return;
       try {
         const { getProducts, getCategories, getShippingRates } = await import('./firebase');
         await Promise.all([
@@ -786,8 +840,12 @@ export default function App() {
       } catch (err) {
         console.warn("Background cache pre-warming failed:", err);
       }
+    }, 2500); // Wait 2.5 seconds to prioritize instant first-render performance
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
     };
-    warmupCache();
   }, []);
 
   return (

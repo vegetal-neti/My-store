@@ -185,14 +185,14 @@ let cachedShippingRates: any[] | null = null;
 let cachedHeroSettings: any = null;
 let cachedSocialSettings: any = null;
 
-export const getProducts = async () => {
+export const getProducts = async (forceFresh = false) => {
   try {
-    if (cachedProducts) {
+    if (cachedProducts && !forceFresh) {
       return cachedProducts;
     }
     
     const cached = getFromLocalCache<any[]>('products');
-    if (cached) {
+    if (cached && !forceFresh) {
       cachedProducts = cached.data;
       const TTL = 300000; // 5 minutes standard for lists
       if (Date.now() - cached.timestamp < TTL) {
@@ -215,7 +215,7 @@ export const getProducts = async () => {
       return cached.data;
     }
     
-    // No cache: Foreground fetch
+    // No cache or forceFresh: Foreground fetch
     const q = query(collection(db, PRODUCTS_COLLECTION));
     const snapshot = await getDocs(q);
     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -227,10 +227,10 @@ export const getProducts = async () => {
   }
 };
 
-export const getProductsWithLimit = async (limitNum: number, categoryId: string = 'all') => {
+export const getProductsWithLimit = async (limitNum: number, categoryId: string = 'all', forceFresh = false) => {
   try {
-    // If cache is loaded, return from memory to minimize Firestore reads to absolute 0
-    if (cachedProducts) {
+    // If cache is loaded and we are not forcing fresh, return from memory
+    if (cachedProducts && !forceFresh) {
       let filtered = cachedProducts;
       if (categoryId && categoryId !== 'all') {
         filtered = cachedProducts.filter((p: any) => p.categoryId === categoryId);
@@ -239,7 +239,7 @@ export const getProductsWithLimit = async (limitNum: number, categoryId: string 
     }
 
     const cached = getFromLocalCache<any[]>('products');
-    if (cached) {
+    if (cached && !forceFresh) {
       cachedProducts = cached.data;
       let filtered = cached.data;
       if (categoryId && categoryId !== 'all') {
@@ -254,7 +254,7 @@ export const getProductsWithLimit = async (limitNum: number, categoryId: string 
       return filtered.slice(0, limitNum);
     }
 
-    const data = await getProducts();
+    const data = await getProducts(forceFresh);
     if (data) {
       let filtered = data;
       if (categoryId && categoryId !== 'all') {
@@ -1068,14 +1068,14 @@ export const getUsers = async () => {
 // ==========================================
 const CATEGORIES_COLLECTION = 'categories';
 
-export const getCategories = async () => {
+export const getCategories = async (forceFresh = false) => {
   try {
-    if (cachedCategories) {
+    if (cachedCategories && !forceFresh) {
       return cachedCategories;
     }
     
     const cached = getFromLocalCache<any[]>('categories');
-    if (cached) {
+    if (cached && !forceFresh) {
       cachedCategories = cached.data;
       const TTL = 1800000; // 30 mins
       if (Date.now() - cached.timestamp < TTL) {
@@ -1416,14 +1416,14 @@ export const deleteProductImageByUrl = async (url: string): Promise<void> => {
 const SETTINGS_COLLECTION = 'settings';
 const HERO_DOCUMENT_ID = 'hero';
 
-export const getHeroSettings = async () => {
+export const getHeroSettings = async (forceFresh = false) => {
   try {
-    if (cachedHeroSettings) {
+    if (cachedHeroSettings && !forceFresh) {
       return cachedHeroSettings;
     }
     
     const cached = getFromLocalCache<any>('hero_settings');
-    if (cached) {
+    if (cached && !forceFresh) {
       cachedHeroSettings = cached.data;
       const TTL = 900000; // 15 mins
       if (Date.now() - cached.timestamp < TTL) {
@@ -1483,14 +1483,14 @@ export const updateHeroSettings = async (settingsData: any) => {
 // ==========================================
 const SOCIAL_DOCUMENT_ID = 'social';
 
-export const getSocialSettings = async () => {
+export const getSocialSettings = async (forceFresh = false) => {
   try {
-    if (cachedSocialSettings) {
+    if (cachedSocialSettings && !forceFresh) {
       return cachedSocialSettings;
     }
     
     const cached = getFromLocalCache<any>('social_settings');
-    if (cached) {
+    if (cached && !forceFresh) {
       cachedSocialSettings = cached.data;
       const TTL = 3600000; // 60 mins
       if (Date.now() - cached.timestamp < TTL) {
@@ -1588,14 +1588,14 @@ export const uploadHeroImage = async (file: File): Promise<string> => {
 // ==========================================
 const SHIPPING_RATES_COLLECTION = 'shipping_rates';
 
-export const getShippingRates = async () => {
+export const getShippingRates = async (forceFresh = false) => {
   try {
-    if (cachedShippingRates) {
+    if (cachedShippingRates && !forceFresh) {
       return cachedShippingRates;
     }
     
     const cached = getFromLocalCache<any[]>('shipping_rates');
-    if (cached) {
+    if (cached && !forceFresh) {
       cachedShippingRates = cached.data;
       const TTL = 3600000; // 60 mins
       if (Date.now() - cached.timestamp < TTL) {
